@@ -125,6 +125,8 @@ class Processing:
 		self.get_firing_rate() 
 		
 		## Save Out Processed Data
+		print(self.firing_rate_df)
+		print(self.behavior_df)
 		self.df = pd.concat([self.behavior_df,self.firing_rate_df],axis='columns') #merge behavior_df and firing_rate_df
 		
 		
@@ -316,6 +318,7 @@ class Processing:
 		spike_entities = [e for e in self.nevfile.get_entities() if e.entity_type==3]
 		headers = np.array([s.get_extended_headers() for s in spike_entities]) #get info for each ch
 		unit_idxs = np.nonzero([h[b'NEUEVWAV'].number_sorted_units for h in headers])[0] #get ch idxs where there is a sorted unit
+		unit_idxs=unit_idxs[:3] #to make runtime shorter for testing
 		self.num_units = len(unit_idxs)
 		self.unit_labels = [h[b'NEUEVLBL'].label[:7] for h in headers[unit_idxs]] #get labels of all sorted units
 		num_units_per_idx = [h[b'NEUEVWAV'].number_sorted_units for h in headers[unit_idxs]]
@@ -331,7 +334,7 @@ class Processing:
 				spike_times[i].append(unit.get_segment_data(spike_idx)[0])
 # 				spike_waveforms.append(unit.get_segment_data(spike_idx)[1])
 
-			print(f'{self.unit_labels[i]}: {unit.item_count} spikes. ({i}/{len(unit_idxs)})')
+			print(f'{self.unit_labels[i]}: {unit.item_count} spikes. ({i+1}/{len(unit_idxs)})')
 		print('All spike times loaded!')
 		
 		## Get Spike Counts
@@ -353,7 +356,7 @@ class Processing:
 
 		self.firing_rate_df = pd.DataFrame(firing_rates,columns=self.unit_labels)
 		self.firing_rate_df['Trial'] = np.arange(self.num_trials)+1
-		self.firing_rate_df['Unit_labels'] = self.unit_labels
+		self.firing_rate_df['Unit_labels'] = [self.unit_labels for i in range(self.num_trials)] 
 				
 		return 
 			
@@ -374,9 +377,8 @@ class Regressions:
 		self.df = processed_data_df
 		
 		self.alpha_threshold = 0.05
-		
-		self.behavior_regressor_matrix = None
-		self.make_behavior_regressor_matrix()
+
+		self.neuron_type_regression()
 		
 		return
 
@@ -399,18 +401,16 @@ class Regressions:
 		regressor_labels = ['Choice1','Side','Q1','Q2','Time']
 		regressor_matrix = self.df[regressor_labels].to_numpy()
 		
-		encodings = np.zeros(len(self.df['Unit_labels']))
+		encodings = np.full(len(self.df['Unit_labels'][0]),None)
 		
 		
 		# Regress FR of each unit against behavior
-		for i,unit in enumerate(self.df['Unit_labels']): #loop thru all units of session
+		for i,unit in enumerate(self.df['Unit_labels'][0]): #loop thru all units of session
 		
 			FR = self.df[unit].to_numpy() #vector of FRs for each trial
 
 			model = sm.OLS(FR, sm.add_constant(regressor_matrix),hasconst=True)
 			res = model.fit()
-			
-	# 		res.summary() #print full regression results
 			
 			if res.f_pvalue < self.alpha_threshold: #if regression is statistically significant
 				signif_regressors_bools = res.pvalues<self.alpha_threshold #get which regressors were statistically signficant
@@ -425,7 +425,7 @@ class Regressions:
 				encodings[i] = 'Non-encoding'
 				
 				
-			print(f'{unit} done. Neuron type: {encodings[i]}. ({i}/{len(self.df["Unit_labels"])})')
+			print(f'{unit} done. Neuron type: {encodings[i]}. ({i+1}/{len(self.df["Unit_labels"][0])})')
 		print('Neuron type regressions done!')		
 		
 		return

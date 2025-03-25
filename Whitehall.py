@@ -10,7 +10,6 @@ Created on Wed Mar 12 14:52:04 2025
 import os
 import sys
 import copy
-import tables
 
 import numpy as np
 import pandas as pd
@@ -29,15 +28,22 @@ import DecisionMakingBehavior_Whitehall as BehaviorAnalysis
 
 
 # Paths
-PROJECT_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis"
-BMI_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\bmi_python"
+# PROJECT_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis"
+# BMI_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\bmi_python"
+PROJECT_FOLDER = r"F:\cole"
+BMI_FOLDER = r"C:\Users\crb4972\Desktop\bmi_python"
+
 NS_FOLDER = os.path.join(BMI_FOLDER, 'riglib', 'ripple', 'pyns', 'pyns')
 
-sys.path.insert(1,BMI_FOLDER) #add bmi_python folder to package search path
-sys.path.insert(2, NS_FOLDER) #add neuroshare python folder to package search path
+if BMI_FOLDER not in sys.path:
+	sys.path.insert(1,BMI_FOLDER) #add bmi_python folder to package search path
+if NS_FOLDER not in sys.path:
+	sys.path.insert(2, NS_FOLDER) #add neuroshare python folder to package search path
+# os.chdir(NS_FOLDER)
 
-from nsfile import NSFile
-
+if 'NSFile' not in dir():
+	from nsfile import NSFile
+os.chdir(PROJECT_FOLDER)
 
 
 
@@ -48,7 +54,9 @@ from nsfile import NSFile
 
 
 
-session = 'braz_test'
+# session = 'braz_test'
+session = 'braz20250225_04_te1880'
+
 
 
 
@@ -318,7 +326,7 @@ class Processing:
 		spike_entities = [e for e in self.nevfile.get_entities() if e.entity_type==3]
 		headers = np.array([s.get_extended_headers() for s in spike_entities]) #get info for each ch
 		unit_idxs = np.nonzero([h[b'NEUEVWAV'].number_sorted_units for h in headers])[0] #get ch idxs where there is a sorted unit
-		unit_idxs=unit_idxs[:3] #to make runtime shorter for testing
+# 		unit_idxs=unit_idxs[:3] #to make runtime shorter for testing
 		self.num_units = len(unit_idxs)
 		self.unit_labels = [h[b'NEUEVLBL'].label[:7] for h in headers[unit_idxs]] #get labels of all sorted units
 		num_units_per_idx = [h[b'NEUEVWAV'].number_sorted_units for h in headers[unit_idxs]]
@@ -334,7 +342,7 @@ class Processing:
 				spike_times[i].append(unit.get_segment_data(spike_idx)[0])
 # 				spike_waveforms.append(unit.get_segment_data(spike_idx)[1])
 
-			print(f'{self.unit_labels[i]}: {unit.item_count} spikes. ({i+1}/{len(unit_idxs)})')
+			print(f'{self.unit_labels[i]}: {unit.item_count} spikes, avg FR {unit.item_count/ ({i+1}/{self.num_units})')
 		print('All spike times loaded!')
 		
 		## Get Spike Counts
@@ -412,6 +420,10 @@ class Regressions:
 			model = sm.OLS(FR, sm.add_constant(regressor_matrix),hasconst=True)
 			res = model.fit()
 			
+# 			print(FR)
+# 			print(sm.add_constant(regressor_matrix))
+			
+			print(res.f_pvalue)
 			if res.f_pvalue < self.alpha_threshold: #if regression is statistically significant
 				signif_regressors_bools = res.pvalues<self.alpha_threshold #get which regressors were statistically signficant
 				signif_regressors = [reg for indx,reg in enumerate(regressor_labels) if signif_regressors_bools[indx]] #get names of those regressors
@@ -481,7 +493,8 @@ class Plotting:
 		return
 
 
-
+a=Processing(session)
+b=Regressions(a.df)
 
 # class SanityChecks:
 # 	def __init__(self):

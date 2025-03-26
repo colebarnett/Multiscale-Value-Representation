@@ -330,6 +330,7 @@ class Processing:
 		self.num_units = len(unit_idxs)
 		self.unit_labels = [h[b'NEUEVLBL'].label[:7] for h in headers[unit_idxs]] #get labels of all sorted units
 		num_units_per_idx = [h[b'NEUEVWAV'].number_sorted_units for h in headers[unit_idxs]]
+		recording_duration = self.nevfile.get_file_info().time_span # [sec]
 
 
 		spike_times = [] #each element is a list spike times for a sorted unit
@@ -342,7 +343,7 @@ class Processing:
 				spike_times[i].append(unit.get_segment_data(spike_idx)[0])
 # 				spike_waveforms.append(unit.get_segment_data(spike_idx)[1])
 
-			print(f'{self.unit_labels[i]}: {unit.item_count} spikes, avg FR {unit.item_count/ ({i+1}/{self.num_units})')
+			print(f'{self.unit_labels[i]}: {unit.item_count} spikes. Avg FR: {unit.item_count/recording_duration} Hz. ({i+1}/{len(unit_idxs)})')
 		print('All spike times loaded!')
 		
 		## Get Spike Counts

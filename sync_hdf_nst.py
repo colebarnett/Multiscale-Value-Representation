@@ -10,14 +10,15 @@ from os import path as ospath
 import numpy as np
 import scipy as sp
 # from scipy import io
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 # import tables
 import os
 import time
 import warnings
 #import neurodsp
 
-BMI_FOLDER = r"C:\Users\crb4972\Desktop\bmi_python"
+# BMI_FOLDER = r"C:\Users\crb4972\Desktop\bmi_python"
+BMI_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\bmi_python"
 NS_FOLDER = ospath.join(BMI_FOLDER,'riglib','ripple','pyns','pyns')
 os.chdir(BMI_FOLDER)
 
@@ -98,16 +99,49 @@ class nsyncHDF:
             MSGTYPE[tp] = int(''.join(str(i) for i in msgtype[:,tp]), 2)
             ROWNUMB[tp] = int(''.join(str(i) for i in rownum[:,tp]), 2)
 			
-            if tp==1000:
+            if tp == 10000 or (tp%1000000==0 and tp!=0):
                 time_taken=time.time() - start_time
                 time_left= np.round(time_taken / tp * (MSGTYPE.shape[0] - tp) / 60)
                 print(f'Approx time remaining: {time_left} mins')
 
         find_recording_start = np.ravel(np.nonzero(strobe))[0]
         find_data_rows = np.logical_and(np.ravel(np.equal(MSGTYPE,13)),np.ravel(np.greater(strobe,0)))  
-        find_data_rows_ind = np.ravel(np.nonzero(find_data_rows))
+        find_data_rows_ind = np.ravel(np.nonzero(find_data_rows))        
 
         rows = ROWNUMB[find_data_rows_ind]    # row numbers (mod 256)
+        
+        
+        
+        # ## Sanity check plot
+        # starttime=18
+        # endtime = starttime+8
+
+        # fig,axs=plt.subplots(3,1)
+        # axs[0].set_title('strobe - Indicates when behavior is sending message')
+        # axs[0].plot(strobe,'.')
+        # axs[0].plot(find_data_rows_ind,np.ones(len(find_data_rows_ind)),'.') #1 is to signal that a message is being sent
+        # axs[0].set_xticks([])
+        # axs[1].set_title('MSGTYPE - Indicates message type')
+        # axs[1].plot(MSGTYPE,'.')
+        # axs[1].plot(find_data_rows_ind,13*np.ones(len(find_data_rows_ind)),'.') #13 is the code for when the message is a row number 
+        # axs[0].set_xlim([starttime*fs,endtime*fs])
+        # axs[1].set_xlim([starttime*fs,endtime*fs])
+        # # axs[1].set_xticks(np.linspace(starttime*fs_DIOx,endtime*fs_DIOx,5),np.linspace(starttime,endtime,5))
+        # # axs[1].set_xlabel('Time (sec)')
+        # axs[1].set_xticks([])
+
+
+        # axs[2].set_title('ROWNUMB - Row numbers and other msgs')
+        # axs[2].plot(ROWNUMB,'.')
+        # axs[2].plot(find_data_rows_ind,rows,'.')
+        # axs[2].set_xlim([starttime*fs,endtime*fs])
+        # axs[2].set_xticks(np.linspace(starttime*fs,endtime*fs,5),np.linspace(starttime,endtime,5))
+        # axs[2].set_xlabel('Time (sec)')
+
+        # fig.suptitle(self.name)
+        # fig.tight_layout()
+        # xxx
+        
 
         prev_row = rows[0]  # placeholder variable for previous row number
         counter = 0         # counter for number of cycles (i.e. number of times we wrap around from 255 to 0) in hdf row numbers
@@ -121,7 +155,7 @@ class nsyncHDF:
             rows[ind] = counter*256 + row
             prev_row = row    
 			
-            if ind==1000:
+            if ind==1000: #to give an estimate of how long file will take to process
                 time_taken=time.time() - start_time
                 time_left= np.round(time_taken / ind * (len(rows) - ind) / 60)
                 print(f'Approx time remaining: {time_left} mins')
@@ -156,7 +190,23 @@ class nsyncHDF:
 #os.chdir(r"/Volumes/Backup Plus/Airport/airp")
 #os.chdir(r"E:")
 # braz = nsyncHDF('braz20220407_04_te243.ns5')
-braz = nsyncHDF(r"F:\cole\braz20250225_04_te1880.ns5")
+# braz = nsyncHDF(r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis\braz20250326_04_te1923.ns5") #bad
+# braz = nsyncHDF(r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis\braz20250225_04_te1880.ns5") #good
 #signals = braz.output['data']
 #fs = braz.output['samp_per_s']
-braz.make_syncHDF_file() 
+
+
+
+PROJ_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis"
+sessions = ['braz20240927_01_te5384','braz20241001_03_te5390','braz20241002_04_te5394',
+            'braz20241004_02_te5396','braz20250221_03_te1873','braz20250225_04_te1880',
+            'braz20250228_03_te1888','braz20250326_04_te1923','braz20250327_04_te1927']
+
+for session in sessions:
+    fname = os.path.join(PROJ_FOLDER,session)
+    braz = nsyncHDF(fname)
+    braz.make_syncHDF_file()
+    
+
+
+# braz.make_syncHDF_file() 

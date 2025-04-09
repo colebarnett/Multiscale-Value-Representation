@@ -35,6 +35,9 @@ There are multiple files for a single recording block with the same prefix.
         
 
 """
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 
 #### Define global things
 
@@ -61,9 +64,9 @@ import DecisionMakingBehavior_Whitehall as BehaviorAnalysis
 
 
 # Paths
-PROJECT_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis"
+PROJ_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis"
 BMI_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\bmi_python"
-# PROJECT_FOLDER = r"F:\cole"
+# PROJ_FOLDER = r"F:\cole"
 # BMI_FOLDER = r"C:\Users\crb4972\Desktop\bmi_python"
 
 NS_FOLDER = os.path.join(BMI_FOLDER, 'riglib', 'ripple', 'pyns', 'pyns')
@@ -82,13 +85,15 @@ sys.path.insert(2, NS_FOLDER) #add neuroshare python folder to package search pa
 # os.chdir(NS_FOLDER)
 from nsfile import NSFile
     
-os.chdir(PROJECT_FOLDER)
+os.chdir(PROJ_FOLDER)
 
 
 
 # Channel keys
 # something here about which chs are which area
 # just do ^^ with ^^ good_chans file?
+
+
 
 
 
@@ -101,11 +106,10 @@ class ProcessSpikes:
     '''
     
     def __init__(self, session: str):
-        
 
         
         self.session = session
-        self.file_prefix = os.path.join(PROJECT_FOLDER, self.session)
+        self.file_prefix = os.path.join(PROJ_FOLDER, self.session)
         
 #         # [Initiate different data files]
 #         self.ns2file = None
@@ -124,13 +128,13 @@ class ProcessSpikes:
         self.has_mat = False # For syncing
         self.check_files()
         
-        ## Get Times Align
-        self.times_align = None
-        self.get_times_align()
-        
         ## Get Spike Times
         self.spike_times = None
         self.get_spike_times()
+        
+        ## Get Times Align
+        self.times_align = None
+        self.get_times_align()
         
         ## Get Firing Rates
         self.firing_rate_df = None
@@ -166,6 +170,43 @@ class ProcessSpikes:
             self.has_nev_output = True
         if os.path.exists(self.file_prefix + '_KFDecoder.pkl'):
             self.has_decoder = True
+        
+          
+        
+    def get_spike_times(self):
+        
+        assert self.has_nev, FileNotFoundError(f'.nev file not found! Session: {self.session}')
+
+        ## Get Spike Times
+        print('Loading spike times..')
+        self.nevfile = NSFile(self.file_prefix + '.nev')
+        spike_entities = [e for e in self.nevfile.get_entities() if e.entity_type==3]
+        headers = np.array([s.get_extended_headers() for s in spike_entities]) #get info for each ch
+        # [print(i,h[b'NEUEVLBL'].label[:7]) for i,h in enumerate(headers) if b'NEUEVLBL' in h.keys()]
+        unit_idxs = np.nonzero([h[b'NEUEVWAV'].number_sorted_units for h in headers])[0] #get ch idxs where there is a sorted 
+        unit_idxs = [unit_idx for unit_idx in unit_idxs if b'NEUEVLBL' in headers[unit_idx].keys()] #exclude entities without NEUEVLBL field
+        if TEST: unit_idxs=unit_idxs[:3] #to make runtime shorter for testing
+        self.num_units = len(unit_idxs)
+        self.unit_labels = ["Unit " + h[b'NEUEVLBL'].label[:7].decode() + self.session for h in headers[unit_idxs] ] #get labels of all sorted units
+        # num_units_per_idx = [h[b'NEUEVWAV'].number_sorted_units for h in headers[unit_idxs]]
+        [print(f'More than one unit found for {h[b"NEUEVLBL"].label[:7]}!') for h in headers[unit_idxs] if h[b'NEUEVWAV'].number_sorted_units > 1]
+        recording_duration = self.nevfile.get_file_info().time_span # [sec]
+
+
+        self.spike_times = [] #each element is a list spike times for a sorted unit
+        # spike_waveforms = [] #each element is a list of waveforms for a sorted unit
+        for i,unit_idx in enumerate(unit_idxs): #loop thru sorted unit
+            unit = spike_entities[unit_idx]
+            self.spike_times.append([]) #initiate list of spike times for this unit
+            
+            for spike_idx in range(unit.item_count):
+                self.spike_times[i].append(unit.get_segment_data(spike_idx)[0])
+#                 spike_waveforms.append(unit.get_segment_data(spike_idx)[1])
+
+            print(f'{self.unit_labels[i]}: {unit.item_count} spikes. Avg FR: {unit.item_count/recording_duration:.2f} Hz. ({i+1}/{len(unit_idxs)})')
+        print('All spike times loaded!')
+        
+        return
 
         
     def get_times_align(self):
@@ -228,45 +269,6 @@ class ProcessSpikes:
         return 
         
         
-        
-        
-        
-        
-    def get_spike_times(self):
-        
-        assert self.has_nev, FileNotFoundError(f'.nev file not found! Session: {self.session}')
-
-        ## Get Spike Times
-        print('Loading spike times..')
-        self.nevfile = NSFile(self.file_prefix + '.nev')
-        spike_entities = [e for e in self.nevfile.get_entities() if e.entity_type==3]
-        headers = np.array([s.get_extended_headers() for s in spike_entities]) #get info for each ch
-        # [print(i,h[b'NEUEVLBL'].label[:7]) for i,h in enumerate(headers) if b'NEUEVLBL' in h.keys()]
-        unit_idxs = np.nonzero([h[b'NEUEVWAV'].number_sorted_units for h in headers])[0] #get ch idxs where there is a sorted 
-        unit_idxs = [unit_idx for unit_idx in unit_idxs if b'NEUEVLBL' in headers[unit_idx].keys()] #exclude entities without NEUEVLBL field
-        # unit_idxs=unit_idxs[:3] #to make runtime shorter for testing
-        self.num_units = len(unit_idxs)
-        self.unit_labels = [b"Unit " + h[b'NEUEVLBL'].label[:7] for h in headers[unit_idxs] ] #get labels of all sorted units
-        num_units_per_idx = [h[b'NEUEVWAV'].number_sorted_units for h in headers[unit_idxs]]
-        recording_duration = self.nevfile.get_file_info().time_span # [sec]
-
-
-        self.spike_times = [] #each element is a list spike times for a sorted unit
-        spike_waveforms = [] #each element is a list of waveforms for a sorted unit
-        for i,unit_idx in enumerate(unit_idxs): #loop thru sorted unit
-            unit = spike_entities[unit_idx]
-            self.spike_times.append([]) #initiate list of spike times for this unit
-            
-            for spike_idx in range(unit.item_count):
-                self.spike_times[i].append(unit.get_segment_data(spike_idx)[0])
-#                 spike_waveforms.append(unit.get_segment_data(spike_idx)[1])
-
-            print(f'{self.unit_labels[i]}: {unit.item_count} spikes. Avg FR: {unit.item_count/recording_duration:.2f} Hz. ({i+1}/{len(unit_idxs)})')
-        print('All spike times loaded!')
-        
-        return
-        
-        
     def get_firing_rate(self):
         '''
         Count how many spikes occured in the time window of interest and then divide by window length.
@@ -298,7 +300,7 @@ class ProcessSpikes:
         print('Done counting spikes!')
 
         self.firing_rate_df = pd.DataFrame(firing_rates,columns=self.unit_labels)
-        self.firing_rate_df['Trial'] = np.arange(self.num_trials)+1
+        # self.firing_rate_df['Trial'] = np.arange(self.num_trials)+1
         self.firing_rate_df['Unit_labels'] = [self.unit_labels for i in range(self.num_trials)] 
                 
         return 
@@ -322,7 +324,7 @@ class ProcessBehavior:
 
         
         self.session = session
-        self.file_prefix = os.path.join(PROJECT_FOLDER, self.session)
+        self.file_prefix = os.path.join(PROJ_FOLDER, self.session)
         
 #         # [Initiate different data files]
 #         self.ns2file = None
@@ -539,32 +541,36 @@ class ProcessBehavior:
  
 
         
-def merge_firingrate_behavior_dfs(session:str, firing_rate_df:pd.DataFrame, behavior_df:pd.DataFrame):
+# def merge_firingrate_behavior_dfs(session:str, firing_rate_df:pd.DataFrame, behavior_df:pd.DataFrame):
    
-    ## Save Out Processed Data
-    df = pd.concat([behavior_df,firing_rate_df],axis='columns') #merge behavior_df and firing_rate_df
-    processed_data_dict = {'Name':session, 'df':df}
+#     ## Save Out Processed Data
+#     df = pd.concat([behavior_df,firing_rate_df],axis='columns') #merge behavior_df and firing_rate_df
+#     processed_data_dict = {'Name':session, 'df':df}
     
-    return processed_data_dict  
+#     return processed_data_dict  
         
         
-def merge_sessions_processed_data_df(): #or this should probly be a dict of dfs huh since each will have diff num of trials
-    return        #uses sessions to find dfs 
+
         
         
         
 class NeuronTypeRegressions:
     
-    def __init__(self,processed_data_dict):
+    def __init__(self,spike_data_dict,behavior_data_dict):
         
-        self.name = processed_data_dict['Name']
-        self.df = processed_data_dict['df']
+        ## Get Spike and Behavior Data
+        assert spike_data_dict['Name'] == behavior_data_dict['Name'], 'Sessions do not match!'
+        self.name = spike_data_dict['Name']
+        self.spike_df = spike_data_dict['df']
+        self.behavior_df = behavior_data_dict['df']
         
         self.alpha_threshold = 0.05
 
+        ## Regress Spiking Activity against Behavior to Determing Neuron Type
         self.neuron_type_df = None
         self.neuron_type_regression()
         
+        ## Save Out
         self.dict_out = {'Name':self.name, 'df':self.neuron_type_df}
         
         return
@@ -574,50 +580,75 @@ class NeuronTypeRegressions:
         
         print('Performing neuron type regression..')
 
-        # Make array of behavioral data
-        # regressor_labels = ['Choice1','Side','Q1','Q2','Time']
-        regressor_labels = [col for col in self.df.columns if not col.startswith(b"Unit")]
-        regressor_matrix = self.df[regressor_labels].to_numpy()
-        
-        encodings = np.full(len(self.df['Unit_labels'][0]),None)
-        units = self.df['Unit_labels'][0]
-        
-        
-        
-        
-        # Regress FR of each unit against behavior
-        for i,unit in enumerate(units): #loop thru all units of session
-        
-            FR = self.df[unit].to_numpy() #vector of FRs for each trial
+        if stable_vs_volatile:
+            subsessions = ['stable block','volatile block']
+        else:
+            subsessions = ['all blocks']
 
-            model = sm.OLS(FR, sm.add_constant(regressor_matrix),hasconst=True)
-            res = model.fit()
+        counter=0
+        encodings = []
+        unit_subsession_labeled = []
+        for ii,subsession in enumerate(subsessions):
             
-#             print(FR)
-#             print(sm.add_constant(regressor_matrix))
+            assert len(self.behavior_df) == len(self.spike_df), 'Number of trials do not match!'
+            num_trials = len(self.spike_df)
             
-            # print(res.f_pvalue)
-            if res.f_pvalue < self.alpha_threshold: #if regression is statistically significant
-                signif_regressors_bools = res.pvalues<self.alpha_threshold #get which regressors were statistically signficant
-                signif_regressors = [reg for indx,reg in enumerate(regressor_labels) if signif_regressors_bools[indx]] #get names of those regressors
-                encodings[i] = signif_regressors 
+            trials = get_stable_volatile_trials(self.name)[subsession] #get trials for specified subsession
+            trials = trials[trials<num_trials] #trim to match actual session length
+            
+            if not len(trials) > 1: #if no trials for current subsession
+                print(f'No trials for {subsession}. Skipping!')
+                continue
                 
-#                 signif_regressors_posneg = res.params[signif_regressors_bools] #get the sign of the coefficient of the significant regressors
-#                 encoding_posneg[chann][unit] = signif_regressors_posneg
-#                 #within nested dict, unit number is the key and the significant regressors are the values
-            
-            else: #if regression isn't statistically significant, there's no encoding
-                encodings[i] = 'Non-encoding'
+            else:        
+                        
+                # Make array of behavioral data
+                # regressor_labels = ['Choice1','Side','Q1','Q2','Time']
+                # regressor_labels = [col for col in self.behavior_df.columns if not col.startswith("Unit")]
+                regressor_matrix = self.behavior_df[REGRESSORS].iloc[trials]
                 
                 
-            print(f'{unit} done. Neuron type: {encodings[i]}. ({i+1}/{len(self.df["Unit_labels"][0])})')
-            
-        print('Neuron type regressions done!')    
+                units = self.spike_df['Unit_labels'][0]
+                # Regress FR of each unit against behavior
+                for i,unit in enumerate(units): #loop thru all units of session
+                
+                    FR = self.spike_df[unit].iloc[trials] #vector of FRs for each trial
+                    
+                    assert len(FR)>1
+                    assert len(regressor_matrix)>1
         
-        self.neuron_type_df = pd.DataFrame.from_dict({'Unit':units, 'Neuron Type':encodings})
-        # print(self.neuron_type_df)
-        
+                    model = sm.OLS(FR, sm.add_constant(regressor_matrix,has_constant='raise'),hasconst=True)
+                    res = model.fit()
+                    
+        #             print(FR)
+        #             print(sm.add_constant(regressor_matrix))
+                    
+                    # print(res.f_pvalue)
+                    if res.f_pvalue < self.alpha_threshold: #if regression is statistically significant
+                        signif_regressors_bools = res.pvalues<self.alpha_threshold #get which regressors were statistically signficant
+                        signif_regressors = [reg for indx,reg in enumerate(res.params.keys()) if signif_regressors_bools[indx]] #get names of those regressors
+                        encodings.append(signif_regressors) 
+                        
+        #                 signif_regressors_posneg = res.params[signif_regressors_bools] #get the sign of the coefficient of the significant regressors
+        #                 encoding_posneg[chann][unit] = signif_regressors_posneg
+        #                 #within nested dict, unit number is the key and the significant regressors are the values
+                    
+                    else: #if regression isn't statistically significant, there's no encoding
+                        encodings.append('Non-encoding')
+                    
+                    unit_subsession_labeled.append(f'{unit} {subsession}')
+                
+                print(f'{unit_subsession_labeled[counter]} trials done. Neuron type: {encodings[counter]}. ({counter+1}/{len(units)*len(subsessions)})')
+                
+                counter+=1
+      
+        self.neuron_type_df = pd.DataFrame.from_dict({'Unit':unit_subsession_labeled, 'Neuron Type':encodings})
+        print('Neuron type regressions done!')
 
+        return
+    
+    def save_out_csv(self):
+        self.neuron_type_df.to_csv(os.path.join(PROJ_FOLDER,f'{self.name}_type_df.csv'))
         return
         
    
@@ -626,19 +657,22 @@ class NeuronTypeRegressions:
         
 class LearningRateRegressions:
     
-    def __init__(self,session):
-        
+    def __init__(self,session,spike_data_dict,neuron_type_dict):
         
         ## Get Spike Info (Firing Rates)
-        Spikes = ProcessSpikes(session)
-        self.spike_df = Spikes.dict_out['df']
-        self.name = Spikes.dict_out['Name']
+        assert spike_data_dict['Name'] == neuron_type_dict['Name'] == session, 'Sessions do not match!'
+        self.spike_df = spike_data_dict['df']
+        self.name = spike_data_dict['Name']
         
         ## Learning Rates for all Units
         self.learning_rates_df = None
         self.learning_rates = np.linspace(start=0.01,stop=0.99,num=50)
-        self.Behavior = ProcessBehavior(session) #instantiate behavior
+        self.Behavior = ProcessBehavior(session) #need to instantiate behavior
         self.get_learning_rates()
+        
+        ## Filter Learning Rates by Neuron Type
+        self.neuron_type_df = neuron_type_dict['df']
+        self.filter_learning_rates()
         
         ## Save Out
         self.dict_out = {'Name':self.name, 'df':self.learning_rates_df}
@@ -651,40 +685,60 @@ class LearningRateRegressions:
         
         print('Performing learning rate regressions..')
         
+        if stable_vs_volatile:
+            subsessions = ['stable block','volatile block']
+        else:
+            subsessions = ['all blocks']
+            
         df_rows_learning_rates = []
         
-        # Get FR for each neuron
-        units = self.spike_df['Unit_labels'][0]
-        for i,unit in enumerate(units):
+        counter=0
+        for ii,subsession in enumerate(subsessions):           
+        
+            assert len(self.Behavior.behavior_df) == len(self.spike_df), 'Number of trials do not match!'
+            num_trials = len(self.spike_df)
             
-            FR = self.spike_df[unit].to_numpy() #vector of FRs for each trial
-            
-            self.regression_weights_df = self.learning_rate_regression(FR)
-            
-            regressor_names = self.regression_weights_df.columns
-            
-            # Find learning rate which maximizes each regression weight
-            row_dict_learning_rates = {'Unit':unit}
-            for j in range(len(regressor_names)):
+            trials = get_stable_volatile_trials(self.name)[subsession] #get trials for specified subsession
+            trials = trials[trials<num_trials] #trim to match actual session length
+        
+            if not len(trials) > 1: #if no trials for current subsession
+                print(f'No trials for {subsession}. Skipping!')    
+                continue
+        
+            # Get FR for each neuron
+            units = self.spike_df['Unit_labels'][0]
+            for i,unit in enumerate(units):
                 
-                # idx of max regression weight for current regressor
-                idx_max_regressor = self.regression_weights_df[regressor_names[j]].idxmax()
+                FR = self.spike_df[unit].iloc[trials] #vector of FRs for subsession trial
                 
-                # Find and store learning rate which corresponds to max regression weight
-                row_dict_learning_rates['Learning rate for ' + regressor_names[j]] = self.learning_rates[idx_max_regressor]
+                self.regression_weights_df = self.learning_rate_regression(FR,trials)
                 
-            df_rows_learning_rates.append(row_dict_learning_rates)
-            
-            print(f'{unit} learning rate found!')
-            
+                regressor_names = self.regression_weights_df.columns
+                
+                # Find learning rate which maximizes each regression weight
+                unit_subsession_labeled = f'{unit} {subsession}'
+                row_dict_learning_rates = {'Unit':unit_subsession_labeled}
+                for j in range(len(regressor_names)):
+                    
+                    # idx of max regression weight for current regressor
+                    idx_max_regressor = self.regression_weights_df[regressor_names[j]].idxmax()
+                    
+                    # Find and store learning rate which corresponds to max regression weight
+                    row_dict_learning_rates['Learning rate for ' + regressor_names[j]] = self.learning_rates[idx_max_regressor]
+                    
+                df_rows_learning_rates.append(row_dict_learning_rates)
+                
+                print(f'{unit_subsession_labeled} learning rate found! ({counter+1}/{len(units)*len(subsessions)})')
+                counter+=1
+                
         self.learning_rates_df = pd.DataFrame(df_rows_learning_rates)
-        print(self.learning_rates_df)
+        # print(self.learning_rates_df)
         
         return
     
                 
                 
-    def learning_rate_regression(self,FR):
+    def learning_rate_regression(self,FR,trials):
         
         # Get behavior regressor for each learning rate
         df_rows_regression_weights = []
@@ -695,8 +749,8 @@ class LearningRateRegressions:
             
             # Make array of behavioral data
             # regressor_labels = behavior_df.columns
-            regressor_labels = ['Choice1','Side','Q1','Q2','Time']
-            regressor_matrix = sm.add_constant(behavior_df[regressor_labels],has_constant='raise') #.to_numpy() 
+            # regressor_labels = ['Choice1','Side','Q1','Q2','Time']
+            regressor_matrix = sm.add_constant(behavior_df[REGRESSORS].iloc[trials],has_constant='raise') #.to_numpy() 
             #raise flag will let us know if one of the variables is already a constant (which would be bad)
 
             
@@ -713,14 +767,36 @@ class LearningRateRegressions:
                 
             df_rows_regression_weights.append(row_dict_regression_weights)
         
-          
-       
         # Organize regression weights for each learning rate into a df  
         return pd.DataFrame(df_rows_regression_weights)
+    
+    
                 
-                
+    def filter_learning_rates(self):
+        
+        units = self.neuron_type_df['Unit'].values
+        cols = self.learning_rates_df.columns
+        
+        for i,unit in enumerate(units):
             
-       
+            neuron_type = get_unit_data(self.neuron_type_df,unit,'Neuron Type')
+            
+            for col in cols: #loop thru "Learning rate for <regressor>" df columns
+                if col.startswith('Learning rate for '):
+                    
+                    # if this neuron's type does not include the regressor specified by this column,
+                    # mark it as Not Applicable (N/A)
+                    if col.removeprefix('Learning rate for ') not in neuron_type: 
+                        self.learning_rates_df.loc[i,col] = 'N/A' 
+                    
+        return           
+            
+    def save_out_csv(self):
+        self.learning_rates_df.to_csv(os.path.join(PROJ_FOLDER,f'{self.name}_learning_rate_df.csv'))
+        return
+        
+
+        
 #     def learning_rate_regression_loop(self):        
         
 #         print('Performing learning rate regressions..')
@@ -831,11 +907,7 @@ class Plotting:
         
         
         
-    def get_unit_data(self,df,unit,heading):
-        desired_row = df[df['Unit']==unit]
-        desired_value = desired_row[heading].values[0]
 
-        return desired_value
         
     
     def count_encodings(self):
@@ -849,7 +921,7 @@ class Plotting:
                   'num_time':0}
         
         for unit in self.unit_list:
-            unit_encoding = self.get_unit_data(self.neuron_type_df,unit,'Neuron Type')
+            unit_encoding = get_unit_data(self.neuron_type_df,unit,'Neuron Type')
             unit_encoding = ','.join(unit_encoding) #join function is to turn the list of strs into a single str to make it easier to search for keywords
         
             self.total_counts = self.count(unit_encoding,self.total_counts)
@@ -925,21 +997,150 @@ class Plotting:
         return
 
 
+
+def merge_sessions_df(dfs: list): # dfs is a list of DataFrames
+   
+    return pd.concat(dfs,axis='index',ignore_index=True)
+
+
+def plot_learning_rates_old(learning_rates_df): 
+    
+    cols = learning_rates_df.columns
+    
+    for col in cols:
+        if col.startswith('Learning rate for '):
+            
+            learning_rates = np.array(learning_rates_df[col].values)
+            learning_rates = [item for item in learning_rates if isinstance(item, (int, float))]
+            
+            num_units = len(learning_rates)
+            
+            if num_units > 0:
+                
+                fig,ax=plt.subplots()
+                ax.hist(learning_rates,bins=10,range=(0,1))
+                ax.set_xlabel(col)
+                ax.set_ylabel('Number of neurons')
+                ax.set_xlim([0,1])
+                fig.suptitle(f'Total number of {col.removeprefix("Learning rate for ")} units: {num_units}')
+                # ax.set_title(f'Total number of {col.removeprefix("Learning rate for ")} units: {num_units}')
+                # fig.suptitle(self.name)
+                fig.tight_layout()
+            
+    return
+
+def plot_learning_rates(learning_rates_df): 
+    
+    cols = learning_rates_df.columns
+    subsessions = ['stable block','volatile block']
+    
+    for col in cols:
+        if col.startswith('Learning rate for '): #and ('Q' is in col)
+            
+            learning_rates_list = []
+            for subsession in subsessions:
+        
+                learning_rates = np.array(learning_rates_df[col].values)
+                learning_rates = [item for item in learning_rates if isinstance(item, (int, float))]
+                learning_rates = [item for i,item in enumerate(learning_rates) if learning_rates_df["Unit"].iloc[i].endswith(subsession)]
+                learning_rates_list.append(learning_rates)
+            
+            if len(learning_rates_list[0]) > 0 and len(learning_rates_list[1]) > 0:
+                
+                fig,ax=plt.subplots()
+                ax.violinplot(learning_rates_list)#,bins=10,range=(0,1))
+                ax.set_xticks([1,2],subsessions)
+                ax.set_ylabel(col)
+                ax.set_ylim([0,1])
+                title_str1 = f'Total number of {subsessions[0]} {col.removeprefix("Learning rate for ")} units: {len(learning_rates_list[0])}\n'
+                title_str2 = f'Total number of {subsessions[1]} {col.removeprefix("Learning rate for ")} units: {len(learning_rates_list[1])}\n'
+                fig.suptitle(title_str1+title_str2)
+                fig.tight_layout()
+                
+            else:
+                if len(learning_rates_list[0]) > 0:
+                    print(f'No volatile block {col.removeprefix("Learning rate for ")} units found!')
+                else:
+                    print(f'No stable block {col.removeprefix("Learning rate for ")} units found!')
+    return
+
+def get_unit_data(df,unit,heading):
+    desired_row = df[df['Unit']==unit]
+    desired_value = desired_row[heading].values[0]
+
+    return desired_value
+
+
+def get_stable_volatile_trials(session):
+    
+     if session == 'braz20240927_01_te5384':
+         stable_trials = np.arange(0,100*6,step=1)
+         volatile_trials = np.arange(0,20*24,step=1) + stable_trials[-1] + 1
+         all_trials = np.arange(0,(100*6)+(20*24),step=1)
+         
+     elif session == 'braz20241001_03_te5390':
+         volatile_trials = np.arange(0,20*24,step=1)
+         stable_trials = np.arange(0,100*6,step=1) + volatile_trials[-1] + 1
+         
+     elif session == 'braz20241002_04_te5394':
+         volatile_trials = np.arange(0,20*24,step=1)
+         stable_trials = np.arange(0,100*6,step=1) + volatile_trials[-1] + 1
+     elif session == 'braz20241004_02_te5396':
+         volatile_trials = np.arange(0,20*24,step=1)
+         stable_trials = np.arange(0,100*6,step=1) + volatile_trials[-1] + 1
+     elif session == 'braz20250221_03_te1873':
+         volatile_trials = np.arange(0,20*24,step=1)
+         stable_trials = np.arange(0,100*6,step=1) + volatile_trials[-1] + 1
+     elif session == 'braz20250225_04_te1880':
+         stable_trials = np.arange(0,100*6,step=1)
+         volatile_trials = np.arange(0,20*24,step=1) + stable_trials[-1] + 1
+         all_trials = np.arange(0,(100*6)+(20*24),step=1)
+     elif session == 'braz20250228_03_te1888':
+         volatile_trials = np.arange(0,20*24,step=1)
+         stable_trials = np.arange(0,100*6,step=1) + volatile_trials[-1] + 1
+     elif session == 'braz20250326_04_te1923':
+         stable_trials = np.arange(0,100*6,step=1)
+         volatile_trials = np.arange(0,20*24,step=1) + stable_trials[-1] + 1
+         all_trials = np.arange(0,(100*6)+(20*24),step=1)
+     elif session == 'braz20250327_04_te1927':
+         volatile_trials = np.arange(0,20*24,step=1)
+         stable_trials = np.arange(0,100*6,step=1) + volatile_trials[-1] + 1
+     return {'stable block':stable_trials, 'volatile block':volatile_trials, 'all blocks':all_trials}
+
 #### Run
 
-# session = 'braz_test'
-session = 'braz20250225_04_te1880'
-# session = 'braz20250326_04_te1923'
+# # session = 'braz_test'
+# session = 'braz20250225_04_te1880'
+# # session = 'braz20250326_04_te1923'
 
-d=LearningRateRegressions(session)
-xxx
-
-a=ProcessSpikes(session).dict_out
-xxx
-b=Regressions(a.dict_out)
-c=Plotting(b.dict_out,None,None)
+# Spikes = ProcessSpikes(session)
+# # Spikes.dict_out['df'].to_csv(os.path.join(PROJ_FOLDER,'spike_df.csv'))
+# # xxx
+# Behav = ProcessBehavior(session)
+# Type = NeuronTypeRegressions(Spikes.dict_out,Behav.dict_out)
+# LR = LearningRateRegressions(session,Spikes.dict_out,Type.dict_out)
+# LR.plot_learning_rates()
 
 # class SanityChecks:
 #     def __init__(self):
 #         sdkfj
-        
+      
+
+sessions = ['braz20250225_04_te1880','braz20250326_04_te1923']
+dfs_out = []
+stable_vs_volatile = True
+TEST = True
+REGRESSORS = ['Choice1','Side','Q1','Q2','Time']
+
+for session in sessions:
+    Spikes = ProcessSpikes(session)
+    Behav = ProcessBehavior(session)
+    Type = NeuronTypeRegressions(Spikes.dict_out,Behav.dict_out)
+    Type.save_out_csv()
+    LR = LearningRateRegressions(session,Spikes.dict_out,Type.dict_out)
+    LR.save_out_csv()
+    dfs_out.append(LR.dict_out['df'])
+    print(f'{session} done!\n\n')
+
+df_merged = merge_sessions_df(dfs_out)  
+plot_learning_rates(df_merged)

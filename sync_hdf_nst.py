@@ -191,21 +191,30 @@ class nsyncHDF:
 #os.chdir(r"E:")
 # braz = nsyncHDF('braz20220407_04_te243.ns5')
 # braz = nsyncHDF(r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis\braz20250326_04_te1923.ns5") #bad
-# braz = nsyncHDF(r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis\braz20250225_04_te1880.ns5") #good
+braz = nsyncHDF(r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis\braz20250225_04_te1880\braz20250225_04_te1880.ns5") #good
 #signals = braz.output['data']
 #fs = braz.output['samp_per_s']
 
 
 
-PROJ_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis"
-sessions = ['braz20240927_01_te5384','braz20241001_03_te5390','braz20241002_04_te5394',
-            'braz20241004_02_te5396','braz20250221_03_te1873','braz20250225_04_te1880',
-            'braz20250228_03_te1888','braz20250326_04_te1923','braz20250327_04_te1927']
+# PROJ_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis"
+# # sessions = [#'braz20240927_01_te5384','braz20241001_03_te5390',#'braz20241002_04_te5394',
+# #             #'braz20241004_02_te5396',
+# #             #'braz20250221_03_te1873',#'braz20250225_04_te1880',
+# #             'braz20250228_03_te1888','braz20250327_04_te1927']#'braz20250326_04_te1923',]
 
-for session in sessions:
-    fname = os.path.join(PROJ_FOLDER,session)
-    braz = nsyncHDF(fname)
-    braz.make_syncHDF_file()
+# # for session in sessions:
+# #     fname = os.path.join(PROJ_FOLDER,session,session)
+# #     print(fname)
+# #     braz = nsyncHDF(fname + '.ns5')
+# #     braz.make_syncHDF_file()
+
+# session = 'braz20250221_03_te1873'
+# fname = os.path.join(PROJ_FOLDER,session,session)
+# print(fname + '.ns5')
+# os.chdir(os.path.join(PROJ_FOLDER,session))
+# braz = nsyncHDF(session + '.ns5')
+# braz.make_syncHDF_file()
     
 
 

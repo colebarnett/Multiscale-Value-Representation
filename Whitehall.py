@@ -53,7 +53,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 # make verbose tag for all mehtods and classes. shit be printing too mcuh
 # change to just import scipy and then call the full call in the code to make it more explainy
 # Change    units = Spikes.firing_rate_df['Unit_labels'][0]   to be    list(Spikes.firing_rate_df.columns) and then delete the unit labels col
-
+# make there be an input to get times align to choose the alignment point
 
 #### Define global things
 
@@ -77,7 +77,7 @@ sys.path.insert(3,os.path.join(PROJ_FOLDER,'utils'))
 
 
 
-
+import gif
 import copy
 import pickle
 import neurodsp.utils
@@ -146,21 +146,32 @@ SESSIONS = [
             "airp20251111_02_te2250"
             ]
 
-REGRESSORS = ['Q1','Choice1','Qhigh','Qchosen','Qdiff_','absQdiff','Choice_high','Side','Time']
+REGRESSORS = [
+              'Q1',
+              'Choice1',
+              # 'Qhigh',
+              'Qchosen',
+              # 'Qdiff_',
+              # 'absQdiff',
+              # 'Choice_high',
+              'Side',
+              'Time'
+              ]
 
 # REGRESSORS = ['Q1','Q2','Choice1',
 #               'Qlow','Qhigh','Qdiff','absQdiff',
 #               'Choice_low','Side','Time']
 
 #Since Q1+Q2=1 and Qlow+Qhigh=1, only one regressor of each pair is needed.
-REGRESSORS = ['Q1','Choice1',
-              'Qhigh','Qdiff_','absQdiff',
-              'Choice_low','Side','Time']
+# REGRESSORS = ['Q1','Choice1',
+#               'Qhigh','Qdiff_','absQdiff',
+#               'Choice_low','Side','Time']
 
 ALPHA_THRESHOLD = 0.05
 
 COLORS = ['red','blue','gold','green','orange','purple']
 LINESTYLES = ['-','--',':','-.']
+MARKERSTYLES = ['o','^','s','*','d','P','X','p','H','<','>']
 
 # Channel keys
 # something here about which chs are which area
@@ -196,11 +207,11 @@ def encoding_regression(spikes,behavior):
     #     # ax.plot(behavior)
     #     # xxx        
     res = model.fit()
-    print(res.pvalues)
-    pvals = res.pvalues[1:] #exclude constant (position 0)
-    f_pval = res.f_pvalue
-    rsqr = res.rsquared
-    return f_pval, pvals, rsqr
+    # print(res.pvalues)
+    # pvals = res.pvalues[1:] #exclude constant (position 0)
+    # f_pval = res.f_pvalue
+    # rsqr = res.rsquared
+    return res #f_pval, pvals, rsqr
 
 def encoding_regression_feature_selection(regressor_list,spikes,behavior_df):
     f_pval, pvals, _ = encoding_regression(spikes,behavior_df[regressor_list])
@@ -234,6 +245,9 @@ def lasso_regression(spikes,behavior,regularization_strength=1e-5,tol=1e-4, verb
     model = Lasso(alpha=regularization_strength,tol=tol)
     model.fit(behavior, spikes) #no need to add constant since intercept is automatically fit by this method
     score = model.score(behavior, spikes) #r squared
+    a=model.get_params()
+    print(a.keys())
+    xxx
     
     if verbose:
         print('Lasso model fit!\n')
@@ -269,6 +283,20 @@ def simple_regression_feature_selection(regressor_list,spikes,behavior_df):
         
     return encoding_list
 
+def simple_regression_plot(regressor,spikes,behavior_df):
+    reg_behav = behavior_df[regressor]
+    res = encoding_regression(spikes,reg_behav)
+    
+    fig,ax=plt.subplots()
+    ax.plot(reg_behav.values,spikes,'o')
+    start,stop = min(reg_behav.values), max(reg_behav.values)
+    x = np.linspace(start,stop,50)
+    y = res.predict(sm.add_constant(np.transpose(x),has_constant='add'))
+    ax.plot(x,y,'k--')
+    ax.set_xlabel(regressor)
+    ax.set_ylabel('Z-scored FR')
+    return
+
 def simple_regression_best_rsqr(regressor_list,spikes,behavior_df):
     rsqr_list = []
     for reg in regressor_list:
@@ -279,15 +307,33 @@ def simple_regression_best_rsqr(regressor_list,spikes,behavior_df):
     return max(rsqr_list)
     
 def area_parser(df,brain_area):
-    match brain_area:
-        case 'vmPFC':
-            subset_df = df[df['Unit_labels'].str.contains('Unit A')]
-        case 'Cd':
-            subset_df = df[df['Unit_labels'].str.contains('Unit C')]
-        case 'OFC':
-            subset_df = df[df['Unit_labels'].str.contains('Unit D')]
-        case _:
-            raise ValueError('Invalid brain area')
+    
+    if 'Unit_labels' in df.columns: #unit=row organization
+        match brain_area:
+            case 'vmPFC':
+                subset_df = df[df['Unit_labels'].str.contains('Unit A')]
+            case 'Cd':
+                subset_df = df[df['Unit_labels'].str.contains('Unit C')]
+            case 'OFC':
+                subset_df = df[df['Unit_labels'].str.contains('Unit D')]
+            case 'all areas':
+                subset_df = df
+            case _:
+                raise ValueError('Invalid brain area')
+                
+    else: #unit=col organization
+        match brain_area:
+            case 'vmPFC':
+                subset_df = df.filter(like='Unit A',axis=1)
+            case 'Cd':
+                subset_df = df.filter(like='Unit C',axis=1)
+            case 'OFC':
+                subset_df = df.filter(like='Unit D',axis=1)
+            case 'all areas':
+                subset_df = df
+            case _:
+                raise ValueError('Invalid brain area')
+      
     return subset_df
 
 def calc_percent_encoding(pval_df,alpha_threshold):
@@ -329,11 +375,14 @@ class ProcessSpikes:
     Output: DataFrame with firing rate for each unit for each trial
     '''
     
-    def __init__(self, session: str, overwrite_flag=False):
+    def __init__(self, session: str, overwrite_flag=False, verbose=True):
 
-        
+        print('\n')
+        print('*'*25)
+        print(session)
         self.session = session
         self.file_prefix = os.path.join(DATA_FOLDER, self.session, self.session)
+        self.verbose=verbose
         
 #         # [Initiate different data files]
 #         self.ns2file = None
@@ -368,8 +417,9 @@ class ProcessSpikes:
         ## Get Firing Rates and PSTHs
         self.firing_rate_df = None
         self.psth_dict = None
-        self.t_before = 0.6 #how far to look before time_align point [s]
-        self.t_after = 0.0 #how far to look after time_align point [s]
+        self.psth_df = None
+        self.t_before = 0.1 #how far to look before time_align point [s]
+        self.t_after = 0.7 #how far to look after time_align point [s]
         self.t_resolution = 0.1 #time resolution ; size of psth time bins [s]
         self.psth_t_vector = np.round(np.arange(-self.t_before+self.t_resolution, self.t_after, self.t_resolution),decimals=2)
         self.get_firing_rate() 
@@ -379,7 +429,7 @@ class ProcessSpikes:
         # self.df = pd.concat([self.behavior_df,self.firing_rate_df],axis='columns') #merge behavior_df and firing_rate_df
         # self.dict_out = {'Name':session, 'df':self.df}
         self.dict_out = {'Session':session, 'fr_df':self.firing_rate_df, 'psth_dict':self.psth_dict, 'psth_t_vector':self.psth_t_vector}
-        
+        print('*'*25)
         
 
     def check_files(self):
@@ -438,8 +488,9 @@ class ProcessSpikes:
             for spike_idx in range(unit.item_count):
                 self.spike_times[i].append(unit.get_segment_data(spike_idx)[0])
                 spike_waveforms[i].append(unit.get_segment_data(spike_idx)[1])
-
-            print(f'{self.unit_labels[i]} - Avg FR: {unit.item_count/recording_duration:.2f} Hz. ({i+1}/{len(unit_idxs)})')
+            
+            if self.verbose:
+                print(f'{self.unit_labels[i]} - Avg FR: {unit.item_count/recording_duration:.2f} Hz. ({i+1}/{len(unit_idxs)})')
         print('All spike times loaded!')
         
         # Save out spike times so we don't need to load them from nev again
@@ -459,8 +510,9 @@ class ProcessSpikes:
         self.num_units = len(self.unit_labels)
             
         #print out FRs for funsies
-        for i,unit_spikes in enumerate(self.spike_times): #loop thru sorted unit
-            print(f'{self.unit_labels[i]} - Avg FR: {len(unit_spikes)/(unit_spikes[-1]-unit_spikes[0]):.2f} Hz. ({i+1}/{len(self.unit_labels)})')
+        if self.verbose:
+            for i,unit_spikes in enumerate(self.spike_times): #loop thru sorted unit
+                print(f'{self.unit_labels[i]} - Avg FR: {len(unit_spikes)/(unit_spikes[-1]-unit_spikes[0]):.2f} Hz. ({i+1}/{len(self.unit_labels)})')
         
         return
         
@@ -493,19 +545,19 @@ class ProcessSpikes:
         self.num_trials = cb.num_successful_trials
         
         # Find times of successful trials
-#         ind_hold_center = cb.ind_check_reward_states - 4 #times corresponding to hold center onset
+        ind = cb.ind_check_reward_states - 4 #times corresponding to hold center onset
 #         ind_mvmt_period = cb.ind_check_reward_states - 3 #times corresponding to target prompt
 #         ind_reward_period = cb.ind_check_reward_states #times corresponding to reward period onset
-        ind_target_hold = cb.ind_check_reward_states - 2 # times corresponding to target hold onset
+        # ind_target_hold = cb.ind_check_reward_states - 2 # times corresponding to target hold onset
         
         # align spike tdt times with hold center hdf indices using syncHDF files
-        target_hold_TDT_ind, DIO_freq = BehaviorAnalysis.get_HDFstate_TDT_LFPsamples(ind_target_hold,cb.state_time,self.syncHDF_file)
+        time_align_TDT_ind, DIO_freq = BehaviorAnalysis.get_HDFstate_TDT_LFPsamples(ind,cb.state_time,self.syncHDF_file)
 
         # Ensure that we have a 1 to 1 correspondence btwn indices we put in and indices we got out.
-        assert len(target_hold_TDT_ind) == len(ind_target_hold), f'Repeat hold times! Session: {self.session}'
-        assert len(target_hold_TDT_ind) == self.num_trials
+        assert len(time_align_TDT_ind) == len(ind), f'Repeat hold times! Session: {self.session}'
+        assert len(time_align_TDT_ind) == self.num_trials
 
-        self.times_align = target_hold_TDT_ind / DIO_freq
+        self.times_align = time_align_TDT_ind / DIO_freq
         
         
         # #Plot to check things out
@@ -589,19 +641,22 @@ class ProcessSpikes:
         # psth_length = int(np.rint((self.t_before + self.t_after)/self.t_resolution)) #num_timepoints
         # psths = np.zeros((self.num_units, self.num_trials, psth_length))
         self.psth_dict = dict()
+        psth_df_dict = dict()
         for unit,unit_label in enumerate(self.unit_labels):
             
             unit_spikes = np.array(self.spike_times[unit])
             psth = self.compute_psth(unit_spikes) #psth = (num_trials x num_timepoints)
             self.psth_dict[unit_label] = psth
+            psth_df_dict[unit_label] = np.ravel(psth)
             
                 
         print('Done making PSTHs!')
-
+        
         # self.psth_dict: keys=unit_labels, values=psth arrays (trials x timepoints)
+        
+        self.psth_df = pd.DataFrame.from_dict(psth_df_dict,orient='columns') #df of size (n_trials * n_timepoints) x n_units
                 
-        return 
-    
+        return   
     
     
     def compute_psth(self,unit_spikes):
@@ -1088,7 +1143,7 @@ class ProcessBehavior:
         
         
         
-    def get_behavior(self,Q_learning=False,learning_rate=None):
+    def get_behavior(self,Q_learning=True,learning_rate=None):
         '''
         Method which takes the hdf files for a session and computes key behavioral metrics for each 
         trial, such as value of each target and rpe. These along with information about each
@@ -1611,7 +1666,7 @@ class TemporalEncodingRegressions:
         self.alpha_threshold = 0.05
 
         ## Regress Spiking Activity against Behavior to Determing Encoding for each Regressor
-        self.regressors = ['Q1','Qhigh','Qdiff_','Choice1']
+        # self.regressors = ['Q1','Qhigh','Qdiff_','Choice1']
         self.areas = ['OFC','vmPFC','Cd']
         self.pval_dict = dict()
         
@@ -1648,12 +1703,12 @@ class TemporalEncodingRegressions:
         # regressor_labels = [col for col in self.behavior_df.columns if not col.startswith("Unit")]
         # regressor_matrix = self.behavior_df[REGRESSORS].iloc[trials]
         # regressor_labels = ['Choice1','Side','Q1','Q2','Time']
-        regressor_matrix = self.behavior_df[self.regressors].iloc[trials]
+        regressor_matrix = self.behavior_df[REGRESSORS].iloc[trials]
 
         
         
         ## Regress FR of each unit against behavior for each timebin
-        for j,regressor in enumerate(self.regressors):
+        for j,regressor in enumerate(REGRESSORS):
             temporal_pvals = np.zeros((num_units,num_timebins))
         
             for i,unit in enumerate(units): #loop thru all units of session
@@ -1664,7 +1719,7 @@ class TemporalEncodingRegressions:
                     timebin_data = psth[:,k] #timebin k for all trials
                     
                     _, pvals = encoding_regression(timebin_data,regressor_matrix)
-                    temporal_pvals[i,k] = pvals[self.regressors.index(regressor)]
+                    temporal_pvals[i,k] = pvals[REGRESSORS.index(regressor)]
     
     
                 # print(f'{i+1}/{num_units}')
@@ -1689,7 +1744,7 @@ class TemporalEncodingRegressions:
         
         num_units_list = []
         for i,area in enumerate(self.areas):
-            for j,regressor in enumerate(self.regressors):
+            for j,regressor in enumerate(REGRESSORS):
                 
                 # get pval_dict for current regressor
                 df_list = list(self.pval_dict.keys())
@@ -1722,7 +1777,7 @@ class TemporalEncodingRegressions:
                         Line2D([0], [0], color='gray', linestyle=LINESTYLES[3])]
         
         area_labels = [f'{self.areas[i]}, {num_units_list[i]} units' for i in range(len(self.areas))]
-        ax.legend(custom_lines, area_labels + self.regressors,ncols=4)
+        ax.legend(custom_lines, area_labels + REGRESSORS,ncols=4)
         
         return
         
@@ -2906,17 +2961,17 @@ def plot_behavior():
             # Behav.plot_choices_and_rewards(save_flag=False)
             
             ##see which q learning model fits the best
-            # vmc = ValueModelingClass()
-            # vmc.plot_model_comparison(Behav.hdf_file, num_trials_A=0, num_trials_B=0)
+            vmc = ValueModelingClass()
+            vmc.plot_model_comparison(Behav.hdf_file, num_trials_A=0, num_trials_B=0)
             
             ##re get values using rishi's method
-            Behav.get_behavior(Q_learning=True)
+            # Behav.get_behavior(Q_learning=True)
             
             ##analyze correlation of behavior variables
-            list_of_vars = ['Q1','Choice1','Qhigh','Qchosen','Qdiff_','absQdiff','Choice_high','Side','Time']
-            corr = Behav.get_behavior_var_corr(list_of_vars)
-            plot_var_corr(corr,list_of_vars,Behav.session)
-            corr_list.append(corr)
+            # list_of_vars = ['Q1','Choice1','Qhigh','Qchosen','Qdiff_','absQdiff','Choice_high','Side','Time']
+            # corr = Behav.get_behavior_var_corr(list_of_vars)
+            # plot_var_corr(corr,list_of_vars,Behav.session)
+            # corr_list.append(corr)
             
             ##analyze distribution of values
             # Behav.plot_values(save_flag=False)
@@ -2928,8 +2983,8 @@ def plot_behavior():
     # plot_value_dist(df,save_flag=False)
     
     ##analyze correlation of behavior variables
-    corr_list = np.array(corr_list)
-    plot_var_corr(np.mean(corr_list,axis=0),list_of_vars,'Across Session Average')
+    # corr_list = np.array(corr_list)
+    # plot_var_corr(np.mean(corr_list,axis=0),list_of_vars,'Across Session Average')
     return
     
         
@@ -2974,10 +3029,10 @@ def run_lasso():
     
     encodings_dict= {} #over all sessions
     
-    for i,session in enumerate([SESSIONS]):
+    for i,session in enumerate([SESSIONS[0]]):
         
         Spikes = ProcessSpikes(session)
-        units = Spikes.firing_rate_df['Unit_labels'][0]
+        units = list(Spikes.firing_rate_df.columns)
         
         Behav = ProcessBehavior(session)
         behavior = Behav.behavior_df[REGRESSORS]
@@ -3131,7 +3186,7 @@ def regression_rsqr_table():
     for i,session in enumerate(SESSIONS):
         
         Spikes = ProcessSpikes(session)
-        units = Spikes.firing_rate_df['Unit_labels'][0]
+        units = list(Spikes.firing_rate_df.columns)
         
         Behav = ProcessBehavior(session)
         behavior_df = Behav.behavior_df
@@ -3226,42 +3281,466 @@ def lasso_gridsearch():
     return
 
 
-
-def do_PCA():
+class PCA_Spike_Analysis:
     
-    for i,session in enumerate([SESSIONS[0]]):
+    def __init__(self, session: str, brain_area: str, Spikes=None, Behav=None):
+        '''
+        Can pass in ProcessSpikes and ProcessBehavior objects, otherwise will load them.
+        
+        '''
+        # Get Spike and Behavior Data
+        if not Spikes:
+            Spikes = ProcessSpikes(session)
+        if not Behav:
+            Behav = ProcessBehavior(session)
+        self.behavior = Behav.behavior_df[REGRESSORS]
+        self.area_psth_df = area_parser(Spikes.psth_df,brain_area)
+        self.psth_dict = Spikes.psth_dict
+        self.session = session
+        self.area = brain_area
+        
+        # print(Spikes.psth_df)
+        # print(self.area_psth_df)
+        
+        # Get Shape and Data information
+        self.units = list(self.area_psth_df.columns)
+        print(self.units)
+        self.n_units = len(self.units)
+        if self.n_units < 1:
+            print('!'*25,f'\nNo units found for {self.area} for {self.session}!\nSkipping..')
+            return
+        self.t_vector = Spikes.psth_t_vector
+        self.n_timebins = len(self.t_vector)
+        self.n_trials = len(self.behavior)
+        self.trials = np.arange(self.n_trials)
+        assert len(self.area_psth_df) == self.n_timebins*self.n_trials
+        self.n_regressors = len(REGRESSORS)
+        
+        # Fit PCA model on all trials. 
+        # This defines the population manifold for the particular area (over the entire session)
+        self.pca = PCA()
+        self.pca.fit(self.area_psth_df.values) #n_obs x n_components = (n_trials * n_timebins) x n_units
+        
+        # Determine manifold dimensionality
+        self.plot_scree()
+        self.n_comp = int(input("How many components to keep? "))
+        
+        # Find how behavioral regressors temporally vary with the population activity components
+        self.betas, self.pvals = self.get_temporal_encoding_pca()
+        self.plot_temporal_encoding_pca(self.betas,self.pvals)
+        
+        # Find population trajectory across timebins, avg across trials
+        self.avg_traj = self.get_traj()
+        
+        return
+        
+        
+    def plot_scree(self):
+        
+        # Scree plot
+        cov = self.pca.get_covariance() #n_components x n_components
+        eigvals = np.linalg.eigvals(cov)
+        fig,ax=plt.subplots()
+        ax.plot(np.arange(len(eigvals))+1,eigvals,'o-')
+        ax.set_xlabel('Principal Component #')
+        ax.set_ylabel('Variance Explained (eigvals of cov mat)')
+        ax.set_title('Scree Plot')
+        fig.suptitle(f'{self.session}\n{self.area}, {self.n_units} units')
+        fig.tight_layout()
+        plt.show()
+        
+        return
+    
+    def get_temporal_encoding_pca(self):
+        
+        temporal_betas = np.zeros((self.n_comp,self.n_regressors,self.n_timebins))
+        temporal_pvals = np.zeros_like(temporal_betas)
+        for k in range(self.n_timebins):
+            
+            timebin_data = np.zeros((self.n_trials,self.n_units))
+            for i,unit in enumerate(self.units):
+                
+                timebin_data[:,i] = self.psth_dict[unit][:,k] #for each unit, get timebin k data for all trials
+            
+            # get the timebin data for principal components
+            timebin_data_transformed = self.pca.transform(timebin_data)
+            
+            # get encoding for this timebin for each dominant component
+            for i in range(self.n_comp): #loop through components that we want to keep
+                res = encoding_regression(timebin_data_transformed[:,i],self.behavior)
+                betas = res.params
+                pvals = res.pvalues
+                
+                for j,regressor in enumerate(REGRESSORS):
+                    temporal_betas[i,j,k] = abs(betas[regressor])
+                    temporal_pvals[i,j,k] = pvals[regressor]
+        
+                    
+        #Plot a simple regression of largest beta regressor for illustration
+        avg_beta = np.mean(temporal_betas,axis=(0,2))
+        max_reg = np.argmax(avg_beta)
+        simple_regression_plot(REGRESSORS[max_reg],timebin_data_transformed[:,0],self.behavior)
+        
+        
+        return temporal_betas, temporal_pvals #shape: (n_components, n_regressors, n_timebins)
+    
+    def plot_temporal_encoding_pca(self, temporal_betas, temporal_pvals):
+        
+        # Plotting: fig per PC
+        for i in range(self.n_comp):
+            fig,ax = plt.subplots() 
+            ax.plot(np.arange(self.n_timebins),np.zeros((self.n_timebins)),'k--')
+            for j,regressor in enumerate(REGRESSORS):
+                to_label=True # for labels
+                
+                for k in range(self.n_timebins):
+                    
+                    if temporal_pvals[i,j,k]<=0.05:
+                        color='red' #significant
+                    elif temporal_pvals[i,j,k]<0.1:
+                        color='blue' #trending
+                    else:
+                        color='grey' #nonsignificant
+                        
+                    if to_label:
+                        label=regressor
+                        to_label=False
+                    else:
+                        label=''
+                        
+                    ax.plot(k,temporal_betas[i,j,k],label=label,color=color,marker=MARKERSTYLES[j]) 
+                
+            ax.set_title(f'Temporal Encoding Dynamics\nPrincipal Component #{i+1}')
+            ax.set_xticks(np.arange(self.n_timebins),self.t_vector)
+            ax.set_ylabel('Beta coef magn')
+            ax.set_xlabel('Time relative to Choice (sec)')
+            ax.legend()
+            fig.suptitle(f'{self.session}\n{self.area}, {self.n_units} units')
+            fig.tight_layout()
+            plt.show()
+        return
+    
+    
+    def get_traj(self):
+        
+        n_dims = 3
+        # need at least three units for a n_dims-d traj
+        if self.n_units < n_dims:
+            print(f'Not enough units for a {n_dims}d trjaectory! (Need at least {n_dims})')
+            return
+                  
+        trajs = np.zeros((self.n_timebins,n_dims,self.n_trials))
+        for tr in range(self.n_trials):
+            
+            # Get timebin data for all units for each trial
+            tr_data = np.zeros((self.n_timebins,self.n_units))
+            for i,unit in enumerate(self.units):
+                tr_data[:,i] = self.psth_dict[unit][tr,:] #for each unit, get all timebin data for trial tr
+            
+            # Transform all timebins for current trial into principal components
+            # (principal components over timebins is a trajectory)
+            tr_data_transformed = self.pca.transform(tr_data)
+            
+            # Keep top n_dims comps (to make n_dims-d traj)
+            trajs[:,:,tr] = tr_data_transformed[:,:n_dims]
+            
+        return np.mean(trajs,axis=-1) #avg over trials to get avg trajectory
+
+def plot_trajs(trajs, labels):
+    '''
+    Parameters
+    ----------
+    trajs : list of 2D Arrays
+        each array is of shape n_timebins x n_components.
+    labels : list of labels for each trajectory (e.g. OFC)
+
+    Returns
+    -------
+    None.
+
+    '''
+    
+    n_timebins,n_comps = np.shape(trajs[0])
+    n_trajs = len(trajs)
+    
+    # 2D plot
+    if n_comps == 2: 
+        fig,ax=plt.subplots()
+        
+        for i,traj,label in zip(range(n_trajs),trajs,labels):
+            ax.plot(traj[:,0],traj[:,1],color=COLORS[i],label=label)
+        ax.legend()
+        ax.set_xlabel('PC #1')
+        ax.set_ylabel('PC #2')
+        ax.set_title('PCA Trajectory')
+        fig.tight_layout()
+    
+    # 3D plot
+    if n_comps >= 3:
+        ax = plt.figure().add_subplot(projection='3d')
+        
+        for i,traj,label in zip(range(n_trajs),trajs,labels):
+            ax.plot(traj[:,0],traj[:,1],traj[:,2],color=COLORS[i],label=label)
+        ax.legend()
+        ax.set_xlabel('PC #1')
+        ax.set_ylabel('PC #2')
+        ax.set_zlabel('PC #3')
+        ax.set_title('PCA Trajectory')
+        
+        elev = 25
+        azim = 50
+        roll = 0
+        ax.view_init(elev, azim, roll)
+        # fig.tight_layout()
+
+    return
+ 
+
+def plot_trajs_gif(trajs, labels):
+    '''
+    Parameters
+    ----------
+    trajs : list of 2D Arrays
+        each array is of shape n_timebins x n_components.
+    labels : list of labels for each trajectory (e.g. OFC)
+
+    Returns
+    -------
+    None.
+
+    '''
+    
+    n_timebins,n_comps = np.shape(trajs[0])
+    n_trajs = len(trajs)
+    
+    # 2D plot
+    if n_comps == 2: 
+        fig,ax=plt.subplots()
+        
+        for i,traj,label in zip(range(n_trajs),trajs,labels):
+            ax.plot(traj[:,0],traj[:,1],color=COLORS[i],label=label)
+        ax.legend()
+        ax.set_xlabel('PC #1')
+        ax.set_ylabel('PC #2')
+        ax.set_title('PCA Trajectory')
+        fig.tight_layout()
+    
+    # 3D plot
+    if n_comps >= 3:     
+        
+        @gif.frame
+        def plot_trajs_frame(k):
+            fig = plt.figure(figsize=(5, 3), dpi=100)
+            ax = fig.add_subplot(projection="3d")
+            
+            xmins,xmaxs = [], []
+            ymins,ymaxs = [], []
+            zmins,zmaxs = [], []
+            for i,traj,label in zip(range(n_trajs),trajs,labels):
+                x = traj[:,0]
+                y = traj[:,1]
+                z = traj[:,2]
+                # ax.plot(x[:k], y[:k], z[:k], lw=2, color=COLORS[i], label=label)
+                ax.plot(x,y,z, lw=1.5, color=COLORS[i], label=label)
+                
+                elev = 30
+                azim = k*2
+                roll = 0
+                ax.view_init(elev, azim, roll)
+            
+                xmins.append(min(x))
+                xmaxs.append(max(x))
+                ymins.append(min(y))
+                ymaxs.append(max(y))
+                zmins.append(min(z))
+                zmaxs.append(max(z))
+            
+            ax.set_xlim(min(xmins), max(xmaxs))
+            ax.set_ylim(min(ymins), max(ymaxs))
+            ax.set_zlim(min(zmins), max(zmaxs))
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
+            ax.legend()
+            ax.set_xlabel('PC #1')
+            ax.set_ylabel('PC #2')
+            ax.set_zlabel('PC #3')
+            ax.set_title('PCA Trajectory')
+            # fig.tight_layout()
+        
+        
+        frames = []
+        # for k in range(n_timebins):
+        for k in range(180):
+            frame = plot_trajs_frame(k)
+            frames.append(frame)
+        
+        gif.save(frames, "Figures/trajs.gif", duration=10)
+
+    return           
+
+
+def do_PCA(): #turn into a class so we can keep the data after it runs
+    
+    for i,session in enumerate(SESSIONS):
+        
+        # pval_dict = {}
+        # pval_dict['Session'] = session
         
         Spikes = ProcessSpikes(session)
-        units = list(Spikes.firing_rate_df.columns)
-        
         Behav = ProcessBehavior(session)
         behavior = Behav.behavior_df[REGRESSORS]
+        units = list(Spikes.psth_df.columns)
+        n_units = len(units)
+        print(Spikes.psth_df)
+        
+        
     
         pca = PCA()
-        X_new = pca.fit_transform(Spikes.firing_rate_df) #n_obs x n_components
+        X_new = pca.fit_transform(Spikes.psth_df) #n_obs x n_components = (n_trials * n_timebins) x n_units
         
         # Scree plot
         cov = pca.get_covariance() #n_components x n_components
         eigvals = np.linalg.eigvals(cov)
         fig,ax=plt.subplots()
-        ax.plot(eigvals,'o-')
+        ax.plot(np.arange(len(eigvals))+1,eigvals,'o-')
         ax.set_xlabel('Principal Component #')
-        ax.set_ylabel('Variance Explained')
+        ax.set_ylabel('Variance Explained (eigvals of cov mat)')
         ax.set_title('Scree Plot')
         fig.suptitle(session)
         fig.tight_layout()
+        plt.show()
         
-        n_comp = input("How many components to keep? ")
-        X_new_trimmed = X_new[:,:n_comp]
+        n_comp = int(input("How many components to keep? "))
+        # X_new_trimmed = X_new[:,:n_comp]
         
-        f_pval, pvals, rsqr = encoding_regression(X_new_trimmed,behavior_df[regressor_list])
+        
+        # Temporal Encoding Regression Analysis
+        n_timebins = Spikes.psth_dict[units[0]].shape[1]
+        n_trials = len(behavior)
+        trials = np.arange(n_trials)
+        n_regressors = len(REGRESSORS)
+        assert n_trials*n_timebins == len(Spikes.psth_df)
+        
+        
+        
+        #get specific timebin data for each trial
+        temporal_betas = np.zeros((n_comp,n_regressors,n_timebins))
+        temporal_pvals = np.zeros_like(temporal_betas)
+        for k in range(n_timebins):
+            
+            timebin_data = np.zeros((n_trials,n_units))
+            for i,unit in enumerate(units):
+                
+                timebin_data[:,i] = Spikes.psth_dict[unit][:,k] #for each unit, get timebin k data for all trials
+            
+            # get the timebin data for principal components
+            timebin_data_transformed = pca.transform(timebin_data)
+            
+            # get encoding for this timebin for each dominant component
+            for i in range(n_comp): #loop through components that we want to keep
+                res = encoding_regression(timebin_data[:,i],behavior)
+                betas = res.params
+                pvals = res.pvalues
+                
+                for j,regressor in enumerate(REGRESSORS):
+                    temporal_betas[i,j,k] = abs(betas[regressor])
+                    temporal_pvals[i,j,k] = pvals[regressor]
+        
+        
+        # Plotting: fig per PC
+        for i in range(n_comp):
+            fig,ax = plt.subplots() 
+            ax.plot(np.arange(n_timebins),np.zeros((n_timebins)),'k--')
+            for j,regressor in enumerate(REGRESSORS):
+                to_label=True # for labels
+                
+                for k in range(n_timebins):
+                    
+                    if temporal_pvals[i,j,k]<=0.05:
+                        color='red' #significant
+                    elif temporal_pvals[i,j,k]<0.1:
+                        color='blue' #trending
+                    else:
+                        color='grey' #nonsignificant
+                        
+                    if to_label:
+                        label=regressor
+                        to_label=False
+                    else:
+                        label=''
+                        
+                    ax.plot(k,temporal_betas[i,j,k],label=label,color=color,marker=MARKERSTYLES[j]) 
+                
+            ax.set_title(f'Temporal Encoding Dynamics\nPrincipal Component #{i+1}')
+            ax.set_xticks(np.arange(n_timebins),Spikes.psth_t_vector)
+            ax.set_ylabel('Beta coef magn')
+            ax.set_xlabel('Time relative to Choice (sec)')
+            ax.legend()
+            fig.suptitle(session)
+            fig.tight_layout()
+            plt.show()
+
+            
+                    
+            # ## Save out
+            # timebin_labels = [f'Timebin_{t}' for t in range(n_timebins)]
+            # pval_df = pd.DataFrame(temporal_pvals,columns=timebin_labels)
+            # pval_df['Principal Component #'] = [f'PC {comp+1}' for comp in range(n_comp)]
+            # pval_dict[f'{regressor}_pval_df'] = pval_df
+            
+        
+        
+        # encoding_dict = {}
+        # for comp in range(n_comp):
+        #     fr = X_new[:,comp]
+                     
+        #     # print(behavior.shape)
+        #     # print(fr.shape)
+        #     score,coefs = lasso_regression(fr,behavior,verbose = False)
+        #     encoding = lasso_feature_selection(coefs,REGRESSORS)
+        #     encodings_dict[comp] = encoding
 
 
 
+def do_PCA2():
+    
+    list_of_objs=[]
+    
+    areas = ['all areas','OFC','vmPFC','Cd']
+    
+    for session in SESSIONS:
+        
+        Spikes = ProcessSpikes(session, verbose=False)
+        Behav = ProcessBehavior(session)
+        
+        for area in areas:
+            
+            pca_analysis = PCA_Spike_Analysis(session,area,Spikes,Behav)
+            
+            list_of_objs.append(pca_analysis)
+            
+    return list_of_objs
 
 
-
-
+def do_PCA_trajs():
+    
+    sessions = ["airp20251029_05_te2231"]#,"airp20251023_03_te2219","airp20251023_03_te2219"]
+    areas =    ["OFC"]#,"vmPFC","Cd"]
+    
+    trajs = []
+    labels = []
+    for session,area in zip(sessions,areas):
+        
+        pca_ = PCA_Spike_Analysis(session,area)
+        
+        trajs.append(pca_.avg_traj)
+        labels.append(area)
+    
+    
+    plot_trajs_gif(trajs,labels)
+    
+    return trajs,labels
 
     
 #### Run

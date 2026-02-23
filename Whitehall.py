@@ -68,7 +68,7 @@ from matplotlib.lines import Line2D
 from matplotlib import pyplot as plt
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 
-from file_info import get_block_info
+from file_info import get_block_info, get_area_info
 
 
 ## Paths
@@ -117,16 +117,16 @@ SUBSESSIONS = ['all trials','stable block','volatile block']
 #             ]
 
 SESSIONS = [
-            # "airp20250919_02_te2177",
-            # "airp20251015_04_te2206",
-            # "airp20251016_03_te2209",
-            # "airp20251020_05_te2214",
-            # "airp20251021_02_te2216", #not 96 chs ??
+            "airp20250919_02_te2177",
+            "airp20251015_04_te2206",
+            "airp20251016_03_te2209",
+            "airp20251020_05_te2214",
+            "airp20251021_02_te2216",
             "airp20251023_03_te2219",
             "airp20251028_03_te2226",
             "airp20251029_05_te2231",
             "airp20251030_02_te2233",
-            "airp20251104_02_te2242",
+            "airp20251104_02_te2242", 
             "airp20251111_02_te2250"
             ]
 
@@ -777,18 +777,45 @@ class ProcessLFP:
         self.snips_dict = {'data':self.snips,'t_before':T_BEFORE,'t_after':T_AFTER,'alignment':TIME_ALIGN}
         
         ## Define chs for each Area
-        assert self.n_chs == 96, f'{self.n_chs} chs!'
-        assert AREAS == ['vmPFC','Cd','OFC']
-        self.vmPFC_chs = np.arange(0,32)
-        self.Cd_chs = np.arange(32,64)
-        self.OFC_chs = np.arange(64,96)
+        self.session_areas = get_area_info(self.session)
+        self._get_chs()
+        # assert self.n_chs == 96, f'{self.n_chs} chs!'
+        
 
         ## Save Out Processed Data
         self.dict_out = {'Session':session, 'snips_dict':self.snips_dict,
-                         'fs':self.fs, 'n_chs':self.n_chs, 'n_trials':self.n_trials}
+                         'fs':self.fs, 'n_chs':self.n_chs, 'n_trials':self.n_trials,
+                         'session_areas':self.session_areas}
         
         
-
+    def _get_chs(self):
+        
+        has_vmPFC = 'vmPFC' in self.session_areas
+        has_Cd = 'Cd' in self.session_areas
+        has_OFC = 'OFC' in self.session_areas
+        
+        #vmPFC
+        if has_vmPFC:
+            self.vmPFC_chs = np.arange(0,32)
+        
+        #Cd
+        if has_vmPFC and has_Cd:
+            self.Cd_chs = np.arange(32,64)
+            
+        elif not has_vmPFC and has_Cd:
+            self.Cd_chs = np.arange(0,32)
+        
+        #OFC
+        if has_vmPFC and has_Cd and has_OFC:
+            self.OFC_chs = np.arange(64,96)
+        elif (has_vmPFC ^ has_Cd) and has_OFC: #  ^ = XOR
+            self.OFC_chs = np.arange(32,64)
+        elif not has_vmPFC and not has_Cd and has_OFC:
+            self.OFC_chs = np.arange(0,32)
+            
+        return
+    
+    
     def check_files(self):
         """
         For a proper analysis to be done,
@@ -987,19 +1014,22 @@ class ProcessLFP:
     
     def get_all_bandpowers(self,overwrite_flag=False):
         
-        if does_pkl_exist('Bandpowers_arr',self.session) and not overwrite_flag:
-            all_bandpowers = load_pkl('Bandpowers_arr',self.session)
+        if does_pkl_exist('Bandpowers_dict',self.session) and not overwrite_flag:
+            all_bandpowers = load_pkl('Bandpowers_dict',self.session)
         else:
             n_bands = len(FREQ_BANDS)
-            n_areas = len(AREAS)
-            all_bandpowers = np.zeros((n_areas,self.n_trials,n_bands,N_TIMEBINS))
-            for i,area in enumerate(AREAS):
+            n_areas = len(self.session_areas)
+            all_bandpowers = dict()
+            bandpowers = np.zeros((self.n_trials,n_bands,N_TIMEBINS))
+            for i,area in enumerate(self.session_areas):
                 for j,freq_band in enumerate(FREQ_BANDS):
-                    all_bandpowers[i,:,j,:] = self._get_bandpower_area(freq_band,area)
-                    
-            save_out_pkl(all_bandpowers,'Bandpowers_arr',self.session)
+                    bandpowers[:,j,:] = self._get_bandpower_area(freq_band,area)
                 
-        return all_bandpowers # Shape = (areas x trials x freq_bands x timepoints)
+                all_bandpowers[area] = bandpowers
+                    
+            save_out_pkl(all_bandpowers,'Bandpowers_dict',self.session)
+                
+        return all_bandpowers # dict of arrays for each area of shape = (trials x freq_bands x timepoints)
     
 
 class ExploreLFP():
@@ -3389,12 +3419,10 @@ def run_temporal_encodings_spikes():
     return
 
 def run_temporal_encodings_LFP():
-    
-    # for s,session in enumerate(SESSIONS):
-        # _, Behav = get_Spikes_Behav(s,session)
         
     fig_folder = 'LFPvsBehav'
     stable_or_volatile = 'all_trials'
+    
     
     pvals_allsess = np.zeros((len(SESSIONS),len(AREAS),len(FREQ_BANDS),len(REGRESSORS),N_TIMEBINS))
     betas_allsess = np.zeros((len(SESSIONS),len(AREAS),len(FREQ_BANDS),len(REGRESSORS),N_TIMEBINS))
@@ -3402,13 +3430,15 @@ def run_temporal_encodings_LFP():
     for i,session in SESSIONS:
         Behav = ProcessBehavior(session)
         LFP = ProcessLFP(session)
-        all_bandpowers = LFP.get_all_bandpowers() # (areas x trials x freq_bands x timepoints)
+        all_bandpowers = LFP.get_all_bandpowers() # dict of arrs(trials x freq_bands x timepoints)
         
         for j,area in enumerate(AREAS):
             for k,freq_band in enumerate(FREQ_BANDS):
                 
+                if area in LFP.session_areas: #if area recorded for this session
+                
                     temporal_pvals, temporal_betas = \
-                        get_temporal_encoding_lfp(all_bandpowers[j,:,k,:],
+                        get_temporal_encoding_lfp(all_bandpowers[area][:,k,:],
                                                   Behav.behavior_df,stable_or_volatile)
                     
                     ax_title = f'Temporal Encoding, LFP vs Behavior\n{area},{freq_band} band'
@@ -3419,11 +3449,15 @@ def run_temporal_encodings_LFP():
                     #compile for across session comparison
                     pvals_allsess[i,j,k,:,:] = temporal_pvals
                     betas_allsess[i,j,k,:,:] = temporal_betas
+                    
+                else: #if area NOT recorded for this session
+                    pvals_allsess[i,j,k,:,:] = np.full_like(pvals_allsess[i,j,k,:,:],np.nan) #fill with nans
+                    betas_allsess[i,j,k,:,:] = np.full_like(betas_allsess[i,j,k,:,:],np.nan)
     
     
     # Plot across session avg for each area and freq band
-    pval_avg = np.mean(pvals_allsess,axis=0)
-    beta_avg = np.mean(betas_allsess,axis=0)
+    pval_avg = np.nanmean(pvals_allsess,axis=0)
+    beta_avg = np.nanmean(betas_allsess,axis=0)
     
     for j,area in enumerate(AREAS):
         for k,freq_band in enumerate(FREQ_BANDS):
@@ -3438,8 +3472,6 @@ def run_temporal_encodings_LFP():
 
 def run_temporal_encodings_LFP_vs_PCA():
     
-    # for s,session in enumerate(SESSIONS):
-        # _, Behav = get_Spikes_Behav(s,session)
     stable_or_volatile = 'all trials'
     fig_folder = 'LFPvsPCA'
     
@@ -3447,24 +3479,28 @@ def run_temporal_encodings_LFP_vs_PCA():
     for s,session in enumerate(SESSIONS):
         Spikes, Behav = get_Spikes_Behav(s,session)
         LFP = ProcessLFP(session)
-        all_bandpowers = LFP.get_all_bandpowers() # (areas x trials x freq_bands x timepoints)
+        all_bandpowers = LFP.get_all_bandpowers() # dict of (trials x freq_bands x timepoints)
         
         for i,spike_area in enumerate(AREAS): # PCA area
             
             PCA = PCA_Spike_Analysis(session,spike_area,Spikes,Behav)
-            PCA_data = PCA.get_timebin_data_transformed() #components x trials x timebins
             
-            for j,lfp_area in enumerate(AREAS):
-                lfp_matrix = all_bandpowers[j,:,:,:] # trials x freqbands x timebins
+            if PCA.n_units > 1:
+                PCA_data = PCA.get_timebin_data_transformed() #components x trials x timebins
                 
-                for comp in range(PCA.n_comp): #do for all dominant components
-                    temporal_pvals, temporal_betas = \
-                        get_temporal_encoding_lfp_pca(PCA_data[comp,:,:],lfp_matrix,Behav.behavior_df,stable_or_volatile)
+                for j,lfp_area in enumerate(AREAS):
                     
-                    ax_title = f'Temporal Encoding, PCA ({spike_area}) vs LFP ({lfp_area})\nPC #{comp+1}'
-                    sup_title = session
-                    plot_temporal_encoding(temporal_pvals,temporal_betas,list(FREQ_BANDS.keys()),ax_title,sup_title)
-                    save_out_svg(f'LFP_{lfp_area}_vs_PCA_{spike_area}_PC{comp+1}_{stable_or_volatile}_{session}',fig_folder)
+                    if lfp_area in LFP.session_areas: #if area recorded for this session
+                        lfp_matrix = all_bandpowers[lfp_area] # trials x freqbands x timebins
+                        
+                        for comp in range(PCA.n_comp): #do for all dominant components
+                            temporal_pvals, temporal_betas = \
+                                get_temporal_encoding_lfp_pca(PCA_data[comp,:,:],lfp_matrix,Behav.behavior_df,stable_or_volatile)
+                            
+                            ax_title = f'Temporal Encoding, PCA ({spike_area}) vs LFP ({lfp_area})\nPC #{comp+1}'
+                            sup_title = session
+                            plot_temporal_encoding(temporal_pvals,temporal_betas,list(FREQ_BANDS.keys()),ax_title,sup_title)
+                            save_out_svg(f'LFP_{lfp_area}_vs_PCA_{spike_area}_PC{comp+1}_{stable_or_volatile}_{session}',fig_folder)
         
             
     return
@@ -3473,10 +3509,28 @@ def run_temporal_encodings_LFP_vs_PCA():
 def get_LFP_bandpowers(): #to compute and save out bandpwoers so i don't have to rerun later
     for s,session in enumerate(SESSIONS):
         # Spikes, Behav = get_Spikes_Behav(s,session)
-        LFP = ProcessLFP(session)
-        all_bandpowers = LFP.get_all_bandpowers(overwrite_flag=True) # (areas x trials x freq_bands x timepoints)
+        try:
+            LFP = ProcessLFP(session)
+            all_bandpowers = LFP.get_all_bandpowers(overwrite_flag=True) # (areas x trials x freq_bands x timepoints)
+        except:
+            print(f'{session} skipped!')
     return
-# def do_LFP_behav_reg():
+
+# def open_LFP(): #to find num of chs for each sess
+#     for s,session in enumerate(SESSIONS):
+        
+#         file_prefix = os.path.join(DATA_FOLDER, session, session)
+#         ns2file = NsxFile(file_prefix + '.ns2')
+#         data = ns2file.getdata()['data'] # (chs x samples) [uV]
+#         n_chs = np.shape(data)[0]
+#         ns2file.close()
+        
+#         print('-'*60)
+#         print(f'{session}: {n_chs} chs.')
+#         print('-'*60)
+        
+#     return
+
     
 #     for s,session in enumerate(SESSIONS):
         

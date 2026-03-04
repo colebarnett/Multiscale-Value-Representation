@@ -34,7 +34,7 @@ def get_avg_sem(arr,axis):
     sem = np.std(arr,axis=axis) / np.sqrt(np.shape(arr)[axis])
     return avg,sem
 
-def encoding_regression(spikes,behavior):
+def linear_encoding_regression(spikes,behavior):
     '''
     Parameters
     ----------
@@ -65,10 +65,12 @@ def encoding_regression(spikes,behavior):
     # rsqr = res.rsquared
     return res #f_pval, pvals, rsqr
 
-def encoding_regression_feature_selection(regressor_list,spikes,behavior_df):
-    f_pval, pvals, _ = encoding_regression(spikes,behavior_df[regressor_list])
+def linear_encoding_regression_feature_selection(regressor_list,spikes,behavior_df):
+    res = linear_encoding_regression(spikes,behavior_df[regressor_list])
     
-    if f_pval < ALPHA_THRESHOLD:
+    pvals = res.pvalues[1:] #exclude constant (position 0)
+    
+    if res.f_pval < ALPHA_THRESHOLD:
         signif_regressors = [str(feat) for feat in np.array(regressor_list)[pvals < ALPHA_THRESHOLD]]
     else:
         signif_regressors = ['']
@@ -76,13 +78,15 @@ def encoding_regression_feature_selection(regressor_list,spikes,behavior_df):
     return signif_regressors
         
 
-def lasso_regression(spikes,behavior,regularization_strength=1e-5,tol=1e-4, verbose=False):
+def regularization_regression(spikes,behavior, lasso_or_ridge='lasso', regularization_strength=1e-5, tol=1e-4, verbose=False):
     '''
-    Lasso (L1 regularization) is a technique to perform feature selection by penalizing model weights (coefficients)
+    Data regularization is a technique to perform feature selection by penalizing model weights (coefficients)
+    Lasso (L1 regularization) penalizes with model weights, whereas Ridge (L2 regularization) penalizes with the squares of the weights
     Parameters
     ----------
     spikes : (1 x num_trials) array of spiking information (psth timebin info or firing rate)
     behavior : (num_regressors x num_trials) array of behavioral information (do not include const. This will be added internally)
+    lasso_or_ridge : str. Either 'lasso' or 'ridge'
     regularization_strength : float on interval (0,inf), where 0 would indicate ordinary least squares
 
     Returns
@@ -93,8 +97,11 @@ def lasso_regression(spikes,behavior,regularization_strength=1e-5,tol=1e-4, verb
     '''
     if verbose:
         print('='*15)
-        print('Starting Lasso Regression..')
-    model = sklearn.linear_model.Lasso(alpha=regularization_strength,tol=tol)
+        print('Starting {lasso_or_ridge} Regression..')
+    if lasso_or_ridge == 'lasso':
+        model = sklearn.linear_model.Lasso(alpha=regularization_strength,tol=tol)
+    elif lasso_or_ridge == 'ridge':
+        model = sklearn.linear_model.Ridge(alpha=regularization_strength,tol=tol)
     model.fit(behavior, spikes) #no need to add constant since intercept is automatically fit by this method
     score = model.score(behavior, spikes) #r squared
     a=model.get_params()
@@ -102,22 +109,22 @@ def lasso_regression(spikes,behavior,regularization_strength=1e-5,tol=1e-4, verb
     xxx
     
     if verbose:
-        print('Lasso model fit!\n')
+        print('{lasso_or_ridge} model fit!\n')
         print(f'Num iterations: {model.n_iter_}')
         print(f'R^2 score: {score}')
         print(f'Num features seen: {model.n_features_in_}')
         if model.feature_names_in_ is not None:
             print(f'Feature names: {model.feature_names_in_}')
-            print(f'Lasso fit coefficients: ')
+            print('Fit coefficients: ')
             [print(f'{model.feature_names_in_[i]} : {model.coef_[i]}') for i in range(model.n_features_in_)]
         else:
             print('Feature names not found')
-            print(f'Lasso fit coefficients: ')
+            print('Fit coefficients: ')
             [print(f'Feature {i+1} : {model.coef_[i]}') for i in range(model.n_features_in_)]
         print('\n\n')
     return score, model.coef_
 
-def lasso_feature_selection(coefs,regressor_list):
+def regularization_regression_feature_selection(coefs,regressor_list):
     thresh = 1E-5
     feats = coefs > thresh #bool arr i think
     return str([str(feat) for feat in np.array(regressor_list)[feats]])
@@ -126,7 +133,7 @@ def simple_regression_feature_selection(regressor_list,spikes,behavior_df):
     encoding_list = []
     for reg in regressor_list:
         reg_behav = behavior_df[reg]
-        f_pval, pval, rsqr = encoding_regression(spikes,reg_behav)
+        f_pval, pval, rsqr = linear_encoding_regression(spikes,reg_behav)
         if f_pval < ALPHA_THRESHOLD:
             encoding_list.append(reg)
             
@@ -137,7 +144,7 @@ def simple_regression_feature_selection(regressor_list,spikes,behavior_df):
 
 def simple_regression_plot(regressor,spikes,behavior_df):
     reg_behav = behavior_df[regressor]
-    res = encoding_regression(spikes,reg_behav)
+    res = linear_encoding_regression(spikes,reg_behav)
     
     fig,ax=plt.subplots()
     ax.plot(reg_behav.values,spikes,'.')
@@ -153,7 +160,7 @@ def simple_regression_best_rsqr(regressor_list,spikes,behavior_df):
     rsqr_list = []
     for reg in regressor_list:
         reg_behav = behavior_df[reg]
-        f_pval, pval, rsqr = encoding_regression(spikes,reg_behav)
+        f_pval, pval, rsqr = linear_encoding_regression(spikes,reg_behav)
         rsqr_list.append(rsqr)
         
     return max(rsqr_list)
@@ -248,11 +255,11 @@ def merge_sessions_df(dfs: list):
     '''
     return pd.concat(dfs,axis='index',ignore_index=True)
 
-def save_out_svg(fig_name,folder):
+def save_out_svg(fig,fig_name,folder):
     path_name = os.path.join(PROJ_FOLDER,'Figures',folder)
     if not os.path.isdir(path_name):
         os.mkdir(path_name)
-    plt.savefig(os.path.join(path_name,f'{fig_name}.svg'),format='svg')
+    fig.savefig(os.path.join(path_name,f'{fig_name}.svg'),format='svg')
     
     print(f'Figures/{folder}/{fig_name}.svg')
     return

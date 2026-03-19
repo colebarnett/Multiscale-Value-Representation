@@ -7,7 +7,7 @@ Created on Mon Sep 25 11:07:55 2023
 import tables
 import os
 # import sys
-# import time
+import time
 # import warnings
 import matplotlib.pyplot as plt
 import numpy as np
@@ -414,7 +414,7 @@ class ChoiceBehavior_Whitehall():
 def CalcValue_2Targs_QLearning(chosen_target,rewards,alpha):
     # NOTE: We are only solving for beta here since alpha (learning rate) is specified.
     # The functions used have been changed accordingly.
-    
+
     Q_initial = 0.5*np.ones(2)
     nll = lambda *args: -LL_Qlearning(*args)
     instructed_or_freechoice = np.full_like(chosen_target,2) #all trials are freechoice in Whitehall task
@@ -424,7 +424,7 @@ def CalcValue_2Targs_QLearning(chosen_target,rewards,alpha):
     if beta_ml > 100:
         print('Warning! Large beta value yielded.')
         print(f'alpha: {alpha}, beta: {beta_ml}')
-    
+
     # RL model fit for Q values
     Q_low, Q_high, prob_choice_low, prob_choice_high, accuracy,log_likelihood = Calculate_Qlearning(beta_ml, alpha, Q_initial, chosen_target, rewards, instructed_or_freechoice)
 
@@ -432,8 +432,10 @@ def CalcValue_2Targs_QLearning(chosen_target,rewards,alpha):
 
 
 def Calculate_Qlearning(beta, alpha, Q_initial, chosen_target, rewards, instructed_or_freechoice):
-
-
+    
+    if type(beta) is not float:
+        beta = float(beta[0])
+        
     # Initialize Q values. Note: Q[i] is the value on trial i before reward feedback
     Q_low = np.zeros(len(chosen_target))
     Q_high = np.zeros(len(chosen_target))
@@ -488,3 +490,88 @@ def LL_Qlearning(beta, alpha, Q_initial, chosen_target, rewards, instructed_or_f
     Q_low, Q_high, prob_choice_low, prob_choice_high,accuracy, log_prob_total = Calculate_Qlearning(beta, alpha, Q_initial, chosen_target, rewards, instructed_or_freechoice)
     
     return log_prob_total
+
+
+
+
+
+
+
+
+
+
+# def CalcValue_2Targs_QLearning_KernelAdapative(chosen_target,rewards,alpha):
+#     # NOTE: We are only solving for ck weight,ck_decay, and beta here since alpha (learning rate) is specified.
+#     # The functions used have been changed accordingly.
+    
+#     Q_initial = 0.5*np.ones(2)
+#     nll = lambda *args: -LL_Qlearning_KernelAdaptive(*args)
+#     instructed_or_freechoice = np.full_like(chosen_target,2) #all trials are freechoice in Whitehall task
+#     result = op.minimize(nll, x0=1, args=(alpha, Q_initial, chosen_target, rewards, instructed_or_freechoice), bounds=[(-2,2), (0,1), (0.1,50)])
+#     ck_weight_ml, ck_decay_ml, beta_ml = result["x"]
+        
+#     # RL model fit for Q values
+#     Q_low, Q_high, prob_choice_low, prob_choice_high, accuracy,log_likelihood = Calc_DistrQlearning_2Targs_KernelAdaptive([alpha, ck_weight_ml, ck_decay_ml, beta_ml], Q_initial, chosen_target, rewards, instructed_or_freechoice)
+
+#     return (Q_low, Q_high)
+
+
+# def Calc_DistrQlearning_2Targs_KernelAdaptive(parameters, Q_initial, chosen_target, rewards, instructed_or_freechoice):
+# 	'''Adaptive Q-learning with choice kernel, no decay, no lapse'''
+# 	alpha_base = parameters[0]
+# 	ck_weight = parameters[1]
+# 	ck_decay = parameters[2]
+# 	beta = parameters[3]
+
+# 	Q_low = np.zeros(len(chosen_target))
+# 	Q_high = np.zeros(len(chosen_target))
+# 	Q_low[0] = Q_initial[0]
+# 	Q_high[0] = Q_initial[1]
+
+# 	CK_low = np.zeros(len(chosen_target))
+# 	CK_high = np.zeros(len(chosen_target))
+
+# 	prob_choice_low = np.zeros(len(chosen_target))
+# 	prob_choice_high = np.zeros(len(chosen_target))
+# 	prob_choice_low[0] = 0.5
+# 	prob_choice_high[0] = 0.5
+
+# 	log_prob_total = 0.
+# 	accuracy = np.array([])
+
+# 	for i in range(len(chosen_target)-1):
+# 		# Update choice kernel
+# 		CK_low[i+1] = ck_decay * CK_low[i] + (1 - ck_decay) * float(chosen_target[i]==1)
+# 		CK_high[i+1] = ck_decay * CK_high[i] + (1 - ck_decay) * float(chosen_target[i]==2)
+# 		
+# 		# ADAPTIVE Q-LEARNING UPDATE (no decay)
+# 		if chosen_target[i] == 1:
+# 			delta = float(rewards[i]) - Q_low[i]
+# 			alpha_effective = alpha_base * abs(delta)
+# 			Q_low[i+1] = Q_low[i] + alpha_effective * delta
+# 			Q_high[i+1] = Q_high[i]
+# 		elif chosen_target[i] == 2:
+# 			delta = float(rewards[i]) - Q_high[i]
+# 			alpha_effective = alpha_base * abs(delta)
+# 			Q_high[i+1] = Q_high[i] + alpha_effective * delta
+# 			Q_low[i+1] = Q_low[i]
+
+# 		if instructed_or_freechoice[i+1] == 2:
+# 			ck_bonus = ck_weight * (CK_high[i+1] - CK_low[i+1])
+# 			prob_choice_low[i+1] = 1./(1. + np.exp(beta*(Q_high[i+1] - Q_low[i+1]) + beta*ck_bonus))
+# 			prob_choice_high[i+1] = 1. - prob_choice_low[i+1]
+
+# 			accuracy = np.append(accuracy, (prob_choice_high[i+1] >= 0.5)&(chosen_target[i+1]==2) or 
+# 			                               (prob_choice_high[i+1] < 0.5)&(chosen_target[i+1]==1))
+# 			log_prob_total += np.log(prob_choice_low[i+1]*(chosen_target[i+1]==1) + 
+# 			                         prob_choice_high[i+1]*(chosen_target[i+1]==2))
+# 		else:
+# 			prob_choice_low[i+1] = prob_choice_low[i]
+# 			prob_choice_high[i+1] = prob_choice_high[i]
+
+# 	return Q_low, Q_high, prob_choice_low, prob_choice_high, accuracy, log_prob_total
+
+# def LL_Qlearning_KernelAdaptive(parameters, Q_initial, chosen_target, rewards, instructed_or_freechoice):  
+#     Q_low, Q_high, prob_choice_low, prob_choice_high,accuracy, log_prob_total = Calc_DistrQlearning_2Targs_KernelAdaptive(parameters, Q_initial, chosen_target, rewards, instructed_or_freechoice)
+    
+#     return log_prob_total

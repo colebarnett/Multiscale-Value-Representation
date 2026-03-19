@@ -26,8 +26,6 @@ import statsmodels.api as sm
 from matplotlib import pyplot as plt
 # from statsmodels.stats.outliers_influence import variance_inflation_factor
 
-from Whitehall import DATA_FOLDER,PROJ_FOLDER,ALPHA_THRESHOLD
-
 #### Utility Funcs
 def get_avg_sem(arr,axis):
     avg = np.mean(arr,axis=axis)
@@ -65,13 +63,13 @@ def linear_encoding_regression(spikes,behavior):
     # rsqr = res.rsquared
     return res #f_pval, pvals, rsqr
 
-def linear_encoding_regression_feature_selection(regressor_list,spikes,behavior_df):
+def linear_encoding_regression_feature_selection(regressor_list,spikes,behavior_df,alpha_thresh):
     res = linear_encoding_regression(spikes,behavior_df[regressor_list])
     
     pvals = res.pvalues[1:] #exclude constant (position 0)
     
-    if res.f_pval < ALPHA_THRESHOLD:
-        signif_regressors = [str(feat) for feat in np.array(regressor_list)[pvals < ALPHA_THRESHOLD]]
+    if res.f_pval < alpha_thresh:
+        signif_regressors = [str(feat) for feat in np.array(regressor_list)[pvals < alpha_thresh]]
     else:
         signif_regressors = ['']
         
@@ -129,12 +127,12 @@ def regularization_regression_feature_selection(coefs,regressor_list):
     feats = coefs > thresh #bool arr i think
     return str([str(feat) for feat in np.array(regressor_list)[feats]])
 
-def simple_regression_feature_selection(regressor_list,spikes,behavior_df):
+def simple_regression_feature_selection(regressor_list,spikes,behavior_df,alpha_thresh):
     encoding_list = []
     for reg in regressor_list:
         reg_behav = behavior_df[reg]
         f_pval, pval, rsqr = linear_encoding_regression(spikes,reg_behav)
-        if f_pval < ALPHA_THRESHOLD:
+        if f_pval < alpha_thresh:
             encoding_list.append(reg)
             
     if len(encoding_list)<1:
@@ -218,12 +216,12 @@ def get_trials(behav_df,stable_or_volatile):
     all_trials = np.arange(len(behav_df))
     
     match stable_or_volatile:
-        case 'stable':
+        case 'stable block':
             trials = all_trials[behav_df['Stable']==1]
-        case 'volatile':
+        case 'volatile block':
             trials = all_trials[behav_df['Volatile']==1]
         case _:
-            trials = trials = np.arange(len(behav_df))
+            trials = all_trials
             
     return trials
 
@@ -255,8 +253,8 @@ def merge_sessions_df(dfs: list):
     '''
     return pd.concat(dfs,axis='index',ignore_index=True)
 
-def save_out_svg(fig,fig_name,folder):
-    path_name = os.path.join(PROJ_FOLDER,'Figures',folder)
+def save_svg(fig,fig_name,folder,proj_path):
+    path_name = os.path.join(proj_path,'Figures',folder)
     if not os.path.isdir(path_name):
         os.mkdir(path_name)
     fig.savefig(os.path.join(path_name,f'{fig_name}.svg'),format='svg')
@@ -264,28 +262,28 @@ def save_out_svg(fig,fig_name,folder):
     print(f'Figures/{folder}/{fig_name}.svg')
     return
 
-def save_csv(df,df_name,session):
-    df.to_csv(os.path.join(DATA_FOLDER,session,f'{session}_{df_name}_df.csv'))
+def save_csv(df,df_name,session,data_folder):
+    df.to_csv(os.path.join(data_folder,session,f'{session}_{df_name}_df.csv'))
     print(f'{session}_{df_name}_df.csv saved!')
     return
 
-def load_csv(df_name,session):
-    f = os.path.join(DATA_FOLDER,session,f'{session}_{df_name}_df.csv')
+def load_csv(df_name,session,data_folder):
+    f = os.path.join(data_folder,session,f'{session}_{df_name}_df.csv')
     df = pd.read_csv(f)
     print(f'{session}_{df_name}_df.csv loaded.')
     return df
 
-def save_pkl(obj,obj_name,session):
-    with open(os.path.join(DATA_FOLDER,session,f'{session}_{obj_name}.pkl'),'wb') as f:
+def save_pkl(obj,obj_name,session,data_folder):
+    with open(os.path.join(data_folder,session,f'{session}_{obj_name}.pkl'),'wb') as f:
         pickle.dump(obj,f)
     print(f'{session}_{obj_name}.pkl saved!')
     return
 
-def load_pkl(obj_name,session):
-    with open(os.path.join(DATA_FOLDER,session,f'{session}_{obj_name}.pkl'),'rb') as f:
+def load_pkl(obj_name,session,data_folder):
+    with open(os.path.join(data_folder,session,f'{session}_{obj_name}.pkl'),'rb') as f:
         obj = pickle.load(f)
     print(f'{session}_{obj_name}.pkl loaded.')
     return obj
 
-def does_pkl_exist(obj_name,session):
-    return os.path.exists(os.path.join(DATA_FOLDER,session,f'{session}_{obj_name}.pkl'))
+def does_pkl_exist(obj_name,session,data_folder):
+    return os.path.exists(os.path.join(data_folder,session,f'{session}_{obj_name}.pkl'))

@@ -1137,15 +1137,15 @@ class ProcessBehavior:
         # plot half of the trials on each axis
         half = len(self.behavior_df['Q1']) //2
         
-        fig,axs = plt.subplots()
-        ax=axs[0]
+        fig,ax = plt.subplots()
+        # ax=axs[0]
         ax.plot(self.behavior_df['Q1'][:half],color='red',label='Q1')
         ax.plot(self.behavior_df['Q2'][:half],color='green',label='Q2')
         ax.legend()
         ax.set_ylabel('Value')
         # ax.set_xlabel('Trials')
         
-        ax=axs[1]
+        fig,ax = plt.subplots()
         x=np.arange(half,len(self.behavior_df['Q1']))
         ax.plot(x,self.behavior_df['Q1'][half:],color='red',label='Q1')
         ax.plot(x,self.behavior_df['Q2'][half:],color='green',label='Q2')
@@ -1164,6 +1164,8 @@ class ProcessBehavior:
         Q1_stab = df['Q1'].loc[df['Stable']==1]
         # Q2_vol = df['Q2'].loc[df['Volatile']==1]
         # Q2_stab = df['Q2'].loc[df['Stable']==1]
+        kurt_vol = sp.stats.kurtosis(Q1_vol)
+        kurt_stab = sp.stats.kurtosis(Q1_stab)
         
         bins=np.linspace(0.0,1.0,num=15)
         
@@ -1210,7 +1212,7 @@ class ProcessBehavior:
             # print(f'{fname} saved!')
         
         
-        return fig
+        return kurt_vol,kurt_stab
     
     
     def plot_choices_and_rewards(self,save_flag=False):
@@ -1348,222 +1350,7 @@ class ProcessBehavior:
         corr_matrix = np.multiply(corr_matrix,corr_matrix) #make it r squared
         
         return corr_matrix
-        
- 
-
-        
-# def merge_firingrate_behavior_dfs(session:str, fr_df:pd.DataFrame, behavior_df:pd.DataFrame):
-   
-#     ## Save Out Processed Data
-#     df = pd.concat([behavior_df,fr_df],axis='columns') #merge behavior_df and fr_df
-#     processed_data_dict = {'Name':session, 'df':df}
-    
-#     return processed_data_dict  
-        
-        
-
-        
-        
-        
-# class NeuronTypeRegressions:
-    
-#     def __init__(self,spike_data_dict,behavior_data_dict):
-        
-#         ## Get Spike and Behavior Data
-#         assert spike_data_dict['Session'] == behavior_data_dict['Session'], 'Sessions do not match!'
-#         self.session = spike_data_dict['Session']
-#         self.spike_df = spike_data_dict['fr_df']
-#         self.behavior_df = behavior_data_dict['df']
-        
-#         self.alpha_threshold = 0.05
-
-#         ## Regress Spiking Activity against Behavior to Determing Neuron Type
-#         self.neuron_type_df = None
-#         self.neuron_type_regression()
-        
-#         ## Save Out
-#         self.dict_out = {'Session':self.session, 'df':self.neuron_type_df}
-        
-#         return
-    
-        
-#     def neuron_type_regression(self):
-        
-#         print('Performing neuron type regression..')
-
-#         counter=0
-#         encodings = []
-#         unit_subsession_labeled = []
-#         for ii,subsession in enumerate(SUBSESSIONS):
-            
-#             assert len(self.behavior_df) == len(self.spike_df), 'Number of trials do not match!'
-#             num_trials = len(self.spike_df)
-            
-#             trials = get_stable_volatile_trials(self.session)[subsession] #get trials for specified subsession
-#             trials = trials[trials<num_trials] #trim to match actual session length
-            
-#             trials = utils.get_trials(self.Behavior.behavior_df,self.stable_or_volatile)
-            
-#             if not len(trials) > 1: #if no trials for current subsession
-#                 print(f'No trials for {subsession}. Skipping!')
-#                 continue
-                
-#             else:        
-                        
-#                 # Make array of behavioral data
-#                 # regressor_labels = ['Choice1','Side','Q1','Q2','Time']
-#                 # regressor_labels = [col for col in self.behavior_df.columns if not col.startswith("Unit")]
-#                 regressor_matrix = self.behavior_df[REGRESSORS].iloc[trials]
-                
-                
-#                 units = self.spike_df['Unit_labels'][0]
-#                 # Regress FR of each unit against behavior
-#                 for i,unit in enumerate(units): #loop thru all units of session
-                
-#                     FR = self.spike_df[unit].iloc[trials] #vector of FRs for each trial
-                    
-#                     assert len(FR)>1
-#                     assert len(regressor_matrix)>1
-        
-#                     f_pval,pvals = utils.linear_encoding_regression(FR,regressor_matrix)
-                    
-#                     # print(res.f_pvalue)
-#                     if f_pval < self.alpha_threshold: #if regression is statistically significant
-#                         signif_regressors_bools = pvals<self.alpha_threshold #get which regressors were statistically signficant
-#                         signif_regressors = [reg for indx,reg in enumerate(regressor_matrix.cols) if signif_regressors_bools[indx]] #get names of those regressors
-#                         encodings.append(signif_regressors) 
-                        
-#         #                 signif_regressors_posneg = res.params[signif_regressors_bools] #get the sign of the coefficient of the significant regressors
-#         #                 encoding_posneg[chann][unit] = signif_regressors_posneg
-#         #                 #within nested dict, unit number is the key and the significant regressors are the values
-                    
-#                     else: #if regression isn't statistically significant, there's no encoding
-#                         encodings.append(['Non-encoding'])
-                    
-#                     unit_subsession_labeled.append(f'{unit} {subsession}')
-                
-#                     # print(f'{unit_subsession_labeled[counter]} done. Neuron type: {encodings[counter]}. ({counter+1}/{len(units)*len(SUBSESSIONS)})')
-                
-#                     counter+=1
       
-#         self.neuron_type_df = pd.DataFrame.from_dict({'Unit':unit_subsession_labeled, 'Neuron Type':encodings})
-#         print('Neuron type regressions done!')
-
-#         return
-            
-        
-class LearningRateRegressions:
-    
-    def __init__(self,session,spike_data_dict,neuron_type_dict,stable_or_volatile):
-        
-        ## Get Spike Info (Firing Rates)
-        assert spike_data_dict['Session'] == neuron_type_dict['Session'] == session, 'Sessions do not match!'
-        self.spike_df = spike_data_dict['fr_df']
-        self.session = spike_data_dict['Session']
-        self.stable_or_volatile = stable_or_volatile
-        
-        ## Learning Rates for all Units
-        self.learning_rate_df = None
-        self.learning_rates = np.linspace(start=0.01,stop=0.99,num=50)
-        self.Behavior = ProcessBehavior(session) #need to instantiate behavior
-        self.get_learning_rates()
-        
-        ## Filter Learning Rates by Neuron Type
-        self.neuron_type_df = neuron_type_dict['df']
-        # self.filter_learning_rates()
-        
-        ## Save Out
-        self.dict_out = {'Session':self.session, 'df':self.learning_rate_df}
-        
-        return
-
-
-
-    def get_learning_rates(self):
-        
-        print('Performing learning rate regressions..')
-            
-        df_rows_learning_rates = []
-        
-        counter=0
-        for ii,subsession in enumerate(SUBSESSIONS):           
-        
-            assert len(self.Behavior.behavior_df) == len(self.spike_df), 'Number of trials do not match!'
-            num_trials = len(self.spike_df)
-            
-            trials = utils.get_trials(self.Behavior.behavior_df,self.stable_or_volatile)
-        
-            if not len(trials) > 1: #if no trials for current subsession
-                print(f'No trials for {subsession}. Skipping!')    
-                continue
-        
-            # Get FR for each neuron
-            units = self.spike_df['Unit_labels'][0]
-            for i,unit in enumerate(units):
-                
-                FR = self.spike_df[unit].iloc[trials] #vector of FRs for subsession trial
-                
-                self.regression_weights_df = self.learning_rate_regression(FR,trials)
-                
-                regressor_names = self.regression_weights_df.columns
-                
-                # Find learning rate which maximizes each regression weight
-                unit_subsession_labeled = f'{unit} {subsession}'
-                row_dict_learning_rates = {'Unit':unit_subsession_labeled}
-                for j in range(len(regressor_names)):
-                    
-                    # idx of max regression weight for current regressor
-                    idx_max_regressor = self.regression_weights_df[regressor_names[j]].idxmax()
-                    
-                    # Find and store learning rate which corresponds to max regression weight
-                    row_dict_learning_rates['Learning rate for ' + regressor_names[j]] = self.learning_rates[idx_max_regressor]
-                    
-                df_rows_learning_rates.append(row_dict_learning_rates)
-                
-                # print(f'{unit_subsession_labeled} learning rate found! ({counter+1}/{len(units)*len(SUBSESSIONS)})')
-                counter+=1
-                
-        self.learning_rate_df = pd.DataFrame(df_rows_learning_rates)
-        # print(self.learning_rate_df)
-        
-        return
-    
-                
-                
-    def learning_rate_regression(self,FR,trials):
-        
-        # Get behavior regressor for each learning rate
-        df_rows_regression_weights = []
-        for learning_rate in self.learning_rates:
-            
-            self.Behavior.get_behavior(Q_learning=True, learning_rate=learning_rate)
-            behavior_df = self.Behavior.behavior_df
-            
-            # Make array of behavioral data
-            # regressor_labels = behavior_df.columns
-            # regressor_labels = ['Choice1','Side','Q1','Q2','Time']
-            regressor_matrix = sm.add_constant(behavior_df[REGRESSORS].iloc[trials],has_constant='raise') #.to_numpy() 
-            #raise flag will let us know if one of the variables is already a constant (which would be bad)
-
-            
-            # Regress FR against behavior
-            model = sm.OLS(FR,regressor_matrix,hasconst=True)
-            res = model.fit()
-            
-            row_dict_regression_weights = {}
-            
-            # Get weights for each regressor
-            regressor_names = res.params.keys()
-            for j in range(len(regressor_names)):
-                row_dict_regression_weights[regressor_names[j]] = res.params.values[j]
-                
-            df_rows_regression_weights.append(row_dict_regression_weights)
-        
-        # Organize regression weights for each learning rate into a df  
-        return pd.DataFrame(df_rows_regression_weights)
-    
-       
-
 
 class PCA_Spike_Analysis:
     
@@ -1611,8 +1398,8 @@ class PCA_Spike_Analysis:
         # self.plot_temporal_encoding_pca(self.betas,self.pvals)
         
         # Find population trajectory across timebins, avg across trials
-        self.avg_traj_stab = self.get_traj('stable')
-        self.avg_traj_vol = self.get_traj('volatile')
+        self.avg_traj_stab = self.get_traj('stable block')
+        self.avg_traj_vol = self.get_traj('volatile block')
         
         return
         
@@ -1880,7 +1667,7 @@ def plot_value_dist(behavior_df,save_flag=False):
         # print(f'{fname} saved!')
     
     
-    return fig
+    return kurt_vol, kurt_stab
 
 
 
@@ -2424,8 +2211,8 @@ def plot_trajs_gif(trajs, labels, n_dims):
                     x = traj[subsession,:,0]
                     y = traj[subsession,:,1]
                     # ax.plot(x[:k], y[:k], z[:k], lw=2, color=COLORS[i], label=label)
-                    ax1.plot(x[:k],y[:k], lw=1.5, color=COLORS[i], label=label, linestyle=LINESTYLES[subsession]) #combined plot
-                    ax.plot(x[:k],y[:k], lw=1.5, color=COLORS[i], label=label, linestyle=LINESTYLES[subsession]) #individual plots
+                    ax1.plot(x[:k],y[:k], lw=1.5, color=COLORS[i], label=label[subsession], linestyle=LINESTYLES[subsession]) #combined plot
+                    ax.plot(x[:k],y[:k], lw=1.5, color=COLORS[i], label=label[subsession], linestyle=LINESTYLES[subsession]) #individual plots
                 ax.set_title(label)
                 ax.set_xlim(xmin,xmax)
                 ax.set_ylim(ymin,ymax)
@@ -3017,13 +2804,18 @@ def run_learning_rate(overwrite_flag=False):
 def run_temporal_encodings_PCA():
     
     fig_folder = 'PCAvsBehav'
-    stable_or_volatile = 'all_trials'
+    # stable_or_volatile = 'all_trials'
+    
+    sessions = ["airp20251029_05_te2231","airp20251023_03_te2219","airp20251023_03_te2219"]
+    areas =    ["OFC","vmPFC","Cd"]
+    ss = [SESSIONS.index(session) for session in sessions]
      
-    for s,session in enumerate(SESSIONS):
-        Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-        
-        for j,area in enumerate(AREAS):
+    for s,session,area in zip(ss,sessions,areas):
             
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            
+            # for j,area in enumerate(AREAS):
+                
             PCA = PCA_Spike_Analysis(session,area,Spikes,Behav)
             
             if PCA.n_units > 1:
@@ -3040,11 +2832,11 @@ def run_temporal_encodings_PCA():
                             temporal_pvals, temporal_betas = \
                                 temporal_encoding_PCA_helper(PCA_data[comp,:,:],Behav.behavior_df,stable_or_volatile)
                             
-                            ax_title = f'Temporal Encoding, PCA vs Behavior\n{area}'
+                            ax_title = f'Temporal Encoding, PCA vs Behavior\n{area}, PC #{comp+1}, {stable_or_volatile}'
                             suptitle = session
                             fig = plot_temporal_encoding(temporal_pvals, temporal_betas, REGRESSORS, ax_title, suptitle)
-                            utils.save_svg(fig,f'{area}_{stable_or_volatile}_{session}',fig_folder,PROJ_FOLDER)
-    
+                            utils.save_svg(fig,f'{area}_PC{comp+1}_{stable_or_volatile}_{session}',fig_folder,PROJ_FOLDER)
+        
     # not doing across session avging because I don't think we can assume population activity decompositions
     # will be comparable from session to session since we are never recording from the same set of neurons
             
@@ -3054,20 +2846,27 @@ def run_temporal_encodings_PCA():
 
 def run_PCA_trajectories():
     
+    trajs = []
+    labels = []
+    
     sessions = ["airp20251029_05_te2231","airp20251023_03_te2219","airp20251023_03_te2219"]
     areas =    ["OFC","vmPFC","Cd"]
     
-    trajs = []
-    labels = []
-    for s,(session,area) in enumerate(zip(sessions,areas)):
-        
+    ss = [SESSIONS.index(session) for session in sessions]
+     
+    # for stable_or_volatile in SUBSESSIONS: #already does stab vs vol
+    for s,session,area in zip(ss,sessions,areas):
+
+            
         Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
         PCA = PCA_Spike_Analysis(session,area,Spikes,Behav)
         
         trajs.append(np.stack([PCA.avg_traj_stab,PCA.avg_traj_vol]))
-        labels.append(area)
+        labels.append(['stable '+area,'volatile '+area])
     
-
+    print(PCA.avg_traj_stab)
+    print('*'*20)
+    print(PCA.avg_traj_vol)
     plot_trajs_gif(trajs,labels,2)
     
     return trajs,labels
@@ -3185,36 +2984,42 @@ def run_temporal_encodings_LFP():
 
 def run_temporal_encodings_LFP_vs_PCA():
     
-    stable_or_volatile = 'all trials'
+    # stable_or_volatile = 'all trials'
     fig_folder = 'LFPvsPCA'
     
-    for s,session in enumerate(SESSIONS):
+    sessions = ["airp20251029_05_te2231","airp20251023_03_te2219","airp20251023_03_te2219"]
+    areas =    ["OFC","vmPFC","Cd"]
+    
+    ss = [SESSIONS.index(session) for session in sessions]
+     
+    # for stable_or_volatile in SUBSESSIONS: #already does stab vs vol
+    for s,session,spike_area in zip(ss,sessions,areas):
         Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
         
-        for i,spike_area in enumerate(AREAS): # PCA area
+        # for i,spike_area in enumerate(AREAS): # PCA area
             
-            PCA = PCA_Spike_Analysis(session,spike_area,Spikes,Behav)
+        PCA = PCA_Spike_Analysis(session,spike_area,Spikes,Behav)
+        
+        if PCA.n_units > 1:
+            PCA_data = PCA.get_timebin_data_transformed() #components x trials x timebins
             
-            if PCA.n_units > 1:
-                PCA_data = PCA.get_timebin_data_transformed() #components x trials x timebins
-                
-                for stable_or_volatile in SUBSESSIONS:
-                
-                    for j,lfp_area in enumerate(AREAS):
+            for stable_or_volatile in SUBSESSIONS:
+            
+                for j,lfp_area in enumerate(AREAS):
+                    
+                    if lfp_area in LFP.session_areas: #if area recorded for this session
+                        lfp_matrix = LFP.all_bandpowers[lfp_area] # trials x freqbands x timebins
                         
-                        if lfp_area in LFP.session_areas: #if area recorded for this session
-                            lfp_matrix = LFP.all_bandpowers[lfp_area] # trials x freqbands x timebins
-                            
-                            if len(utils.get_trials(Behav.behavior_df, stable_or_volatile)) > 0:
-                            
-                                for comp in range(PCA.n_comp): #do for all dominant components
-                                    temporal_pvals, temporal_betas = \
-                                        temporal_encodings_LFP_vs_PCA_helper(PCA_data[comp,:,:],lfp_matrix,Behav.behavior_df,stable_or_volatile)
-                                    
-                                    ax_title = f'Temporal Encoding, PCA ({spike_area}) vs LFP ({lfp_area})\nPC #{comp+1}\n{stable_or_volatile}'
-                                    suptitle = session
-                                    fig = plot_temporal_encoding(temporal_pvals,temporal_betas,list(FREQ_BANDS.keys()),ax_title,suptitle)
-                                    utils.save_svg(fig,f'LFP_{lfp_area}_vs_PCA_{spike_area}_PC{comp+1}_{stable_or_volatile}_{session}',fig_folder,PROJ_FOLDER)
+                        if len(utils.get_trials(Behav.behavior_df, stable_or_volatile)) > 0:
+                        
+                            for comp in range(PCA.n_comp): #do for all dominant components
+                                temporal_pvals, temporal_betas = \
+                                    temporal_encodings_LFP_vs_PCA_helper(PCA_data[comp,:,:],lfp_matrix,Behav.behavior_df,stable_or_volatile)
+                                
+                                ax_title = f'Temporal Encoding, PCA ({spike_area}) vs LFP ({lfp_area})\nPC #{comp+1}\n{stable_or_volatile}'
+                                suptitle = session
+                                fig = plot_temporal_encoding(temporal_pvals,temporal_betas,list(FREQ_BANDS.keys()),ax_title,suptitle)
+                                utils.save_svg(fig,f'LFP_{lfp_area}_vs_PCA_{spike_area}_PC{comp+1}_{stable_or_volatile}_{session}',fig_folder,PROJ_FOLDER)
             
             
     return
@@ -3435,20 +3240,24 @@ def plot_behavior():
     df_list =[]
     corr_list=[]
     aics_list=[]
+    kurt_vol_list=[]
+    kurt_stab_list=[]
     for s,session in enumerate(SESSIONS):
         
         #choose which sessions to do
-        # if session == 'braz20250228_03_te1888':
-        
+        # if session == 'airp20251111_02_te2250':
         if 1:
+            
             Behav = ProcessBehavior(session)
+            # Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            
             # Behav.check_all_behavior()
             # Behav.plot_choices_and_rewards(save_flag=False)
             
             ##see which q learning model fits the best
-            vmc = ValueModelingClass()
-            fig,ax,aics = vmc.plot_model_comparison(Behav.hdf_file, num_trials_A=0, num_trials_B=0)
-            aics_list.append(aics)
+            # vmc = ValueModelingClass()
+            # fig,ax,aics = vmc.plot_model_comparison(Behav.hdf_file, num_trials_A=0, num_trials_B=0)
+            # aics_list.append(aics)
             
             ##re get values using rishi's method
             # Behav.get_behavior(Q_learning=True)
@@ -3461,19 +3270,30 @@ def plot_behavior():
             
             ##analyze distribution of values
             # Behav.plot_values(save_flag=False)
-            # Behav.plot_value_dist(save_flag=True)
+            kurt_vol, kurt_stab = Behav.plot_value_dist(save_flag=False)
+            kurt_vol_list.append(kurt_vol)
+            kurt_stab_list.append(kurt_stab)
             # xxx
-            # df_list.append(Behav.behavior_df)
+            df_list.append(Behav.behavior_df)
       
     ##analyze distribution of values
-    # df = merge_sessions_df(df_list)
-    # plot_value_dist(df,save_flag=False)
+    df = utils.merge_sessions_df(df_list)
+    plot_value_dist(df,save_flag=False)
     
     ##analyze correlation of behavior variables
     # corr_list = np.array(corr_list)
     # plot_var_corr(np.mean(corr_list,axis=0),list_of_vars,'Across Session Average')
     
     #shape aics_list = num_sess len list of dicts
+    
+    
+    fig,ax = plt.subplots()
+    ax.bar(['volatile','stable'],[np.mean(kurt_vol_list),np.mean(kurt_stab_list)])
+    ax.scatter(1*np.ones(len(kurt_vol_list)),kurt_vol_list)
+    ax.scatter(2*np.ones(len(kurt_vol_list)),kurt_stab_list)
+    
+    
+    
     return
 
 
@@ -3588,6 +3408,9 @@ def load_data(overwrite_flag=False):
 def get_Spikes_Behav_LFP(s: int, session: str):
     # s is idx counter representing the number session to load
     # session is the str name of the session to load
+    
+    assert SESSIONS[s] == session
+    
     if SPIKES_LIST:
         Spikes = SPIKES_LIST[s]
         Behav = BEHAV_LIST[s]

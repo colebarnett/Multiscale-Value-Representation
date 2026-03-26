@@ -55,6 +55,7 @@ import os
 import sys
 import gif
 import copy
+import time
 # import pickle
 import sklearn
 # import neurodsp
@@ -66,6 +67,7 @@ import matplotlib_venn
 import statsmodels.api as sm
 from matplotlib.lines import Line2D
 from matplotlib import pyplot as plt
+import matplotlib.patches as mpatches
 # from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 
@@ -238,9 +240,9 @@ class ProcessSpikes:
         self.get_psth()
         
         ## Save Out Processed Data
-        # self.df = pd.concat([self.behavior_df,self.firing_rate_df],axis='columns') #merge behavior_df and firing_rate_df
+        # self.df = pd.concat([self.behavior_df,self.fr_df],axis='columns') #merge behavior_df and fr_df
         # self.dict_out = {'Name':session, 'df':self.df}
-        # self.dict_out = {'Session':session, 'fr_df':self.firing_rate_df, 'psth_dict':self.psth_dict, 'psth_t_vector':T_VECTOR}
+        # self.dict_out = {'Session':session, 'fr_df':self.fr_df, 'psth_dict':self.psth_dict, 'psth_t_vector':T_VECTOR}
         self.dict_out = {'Session':session, 'psth_dict':self.psth_dict, 'psth_t_vector':T_VECTOR, 'alignment':ALIGNMENT}
         # utils.save_pkl(self, 'Spikes', self.session,DATA_FOLDER)
         print('*'*25)
@@ -412,9 +414,9 @@ class ProcessSpikes:
                 
         print('Done counting spikes!')
 
-        self.firing_rate_df = pd.DataFrame(sp.stats.zscore(firing_rates,axis=0),columns=self.unit_labels)
-        # self.firing_rate_df['Trial'] = np.arange(self.num_trials)+1
-        # self.firing_rate_df['Unit_labels'] = [self.unit_labels for i in range(self.num_trials)] 
+        self.fr_df = pd.DataFrame(sp.stats.zscore(firing_rates,axis=0),columns=self.unit_labels)
+        # self.fr_df['Trial'] = np.arange(self.num_trials)+1
+        # self.fr_df['Unit_labels'] = [self.unit_labels for i in range(self.num_trials)] 
                 
         return 
     
@@ -446,9 +448,9 @@ class ProcessSpikes:
                 
         print('Done counting spikes!')
 
-        self.firing_rate_df = pd.DataFrame(sp.stats.zscore(firing_rates,axis=0),columns=self.unit_labels)
-        # self.firing_rate_df['Trial'] = np.arange(self.num_trials)+1
-        # self.firing_rate_df['Unit_labels'] = [self.unit_labels for i in range(self.num_trials)] 
+        self.fr_df = pd.DataFrame(sp.stats.zscore(firing_rates,axis=0),columns=self.unit_labels)
+        # self.fr_df['Trial'] = np.arange(self.num_trials)+1
+        # self.fr_df['Unit_labels'] = [self.unit_labels for i in range(self.num_trials)] 
                 
         return
     
@@ -985,7 +987,7 @@ class ProcessBehavior:
             Q0 = 0.5*np.ones(2)
             instructed_or_freechoice = np.full_like(choices,2)
             Q1,Q2,_,_,_,_ = BehaviorAnalysis.Calculate_Qlearning(beta,learning_rate,Q0,choices,rewards,instructed_or_freechoice)
-            # [Q1,Q2] = BehaviorAnalysis.CalcValue_2Targs_QLearning(choices,rewards,learning_rate) #this is slower
+            # [Q1,Q2] = BehaviorAnalysis.CalcValue_2Targs_QLearning(choices,rewards,learning_rate) #this is slower. don't need to solve for beta since we dont care about fitting based on choice prob
         elif Q_learning and not learning_rate: #do Rishi's Q-learning method w/ specified model
             vmc = ValueModelingClass()
             value_dict = vmc.get_values(self.hdf_file, num_trials_A=0, num_trials_B=0, method=VALUE_MODEL)
@@ -1350,10 +1352,10 @@ class ProcessBehavior:
  
 
         
-# def merge_firingrate_behavior_dfs(session:str, firing_rate_df:pd.DataFrame, behavior_df:pd.DataFrame):
+# def merge_firingrate_behavior_dfs(session:str, fr_df:pd.DataFrame, behavior_df:pd.DataFrame):
    
 #     ## Save Out Processed Data
-#     df = pd.concat([behavior_df,firing_rate_df],axis='columns') #merge behavior_df and firing_rate_df
+#     df = pd.concat([behavior_df,fr_df],axis='columns') #merge behavior_df and fr_df
 #     processed_data_dict = {'Name':session, 'df':df}
     
 #     return processed_data_dict  
@@ -1461,7 +1463,7 @@ class LearningRateRegressions:
         self.stable_or_volatile = stable_or_volatile
         
         ## Learning Rates for all Units
-        self.learning_rates_df = None
+        self.learning_rate_df = None
         self.learning_rates = np.linspace(start=0.01,stop=0.99,num=50)
         self.Behavior = ProcessBehavior(session) #need to instantiate behavior
         self.get_learning_rates()
@@ -1471,7 +1473,7 @@ class LearningRateRegressions:
         # self.filter_learning_rates()
         
         ## Save Out
-        self.dict_out = {'Session':self.session, 'df':self.learning_rates_df}
+        self.dict_out = {'Session':self.session, 'df':self.learning_rate_df}
         
         return
 
@@ -1521,8 +1523,8 @@ class LearningRateRegressions:
                 # print(f'{unit_subsession_labeled} learning rate found! ({counter+1}/{len(units)*len(SUBSESSIONS)})')
                 counter+=1
                 
-        self.learning_rates_df = pd.DataFrame(df_rows_learning_rates)
-        # print(self.learning_rates_df)
+        self.learning_rate_df = pd.DataFrame(df_rows_learning_rates)
+        # print(self.learning_rate_df)
         
         return
     
@@ -1881,86 +1883,34 @@ def plot_value_dist(behavior_df,save_flag=False):
     return fig
 
 
-def plot_learning_rate_violins(learning_rates_df,neuron_type_df): 
-    
-    cols = learning_rates_df.columns
-    unique_units = get_unique_units(learning_rates_df["Unit"])
-    
-    for col in cols:
-        if 'Q' in col: #only do for value related stuff
-            
-            learning_rates_list = []
-            subsession_labels = []
-            for subsession in SUBSESSIONS:
-                
-                # Get learning rate for all units that encode this col for this subsession
-                learning_rates = []
-                for unit in unique_units:
-                    
-                    # if this unit encodes the current column during this subsession
-                    if col.removeprefix('Learning rate for ') in get_unit_data(neuron_type_df,f'{unit} {subsession}','Neuron Type'):
 
-                        
-                        learning_rates.append(learning_rates_df[col][learning_rates_df["Unit"]==f'{unit} {subsession}'].values)
-                        # print(f'{unit} {subsession}')
-                        # print(col)
-                        # print(get_unit_data(neuron_type_df,f'{unit} {subsession}','Neuron Type'))
-                        # print(learning_rates_df[col][learning_rates_df["Unit"]==f'{unit} {subsession}'].values)
-                        # xxx
+def filter_learning_rates(learning_rate_df,neuron_type_df):
+    
+    units = neuron_type_df['Unit'].values
+    cols = learning_rate_df.columns
+    
+    for i,unit in enumerate(units):
         
-                if len(learning_rates)>0:
-                    learning_rates_list.append(np.array(learning_rates).flatten())
-                    subsession_labels.append(subsession + f'\nnum_units: {len(learning_rates)}')
-            
-            if len(learning_rates_list) > 0:
-                
-                fig,ax=plt.subplots()
-                ax.violinplot(learning_rates_list)#,bins=10,range=(0,1))
-                ax.set_xticks(np.arange(1,len(learning_rates_list)+1),subsession_labels)
-                ax.set_ylabel(col)
-                ax.set_ylim([0,1])
-                fig.suptitle(f'{col.removeprefix("Learning rate for ")} Learning Rates by subsession')
-                fig.tight_layout()
-                
-                plt.savefig(os.path.join(PROJ_FOLDER,'Figures',f'{col.removeprefix("Learning rate for ")} Learning Rates.svg'),format="svg")
-                
-                
-            else:
-                if len(learning_rates_list[0]) > 0:
-                    print(f'No volatile block {col.removeprefix("Learning rate for ")} units found!')
-                else:
-                    print(f'No stable block {col.removeprefix("Learning rate for ")} units found!')
-    return fig
-
-
-
-# def filter_learning_rates(learning_rates_df,neuron_type_df):
-    
-#     units = neuron_type_df['Unit'].values
-#     cols = learning_rates_df.columns
-    
-#     for i,unit in enumerate(units):
+        neuron_type = utils.get_unit_data(neuron_type_df,unit,'Neuron Type')
         
-#         neuron_type = get_unit_data(neuron_type_df,unit,'Neuron Type')
-        
-#         for col in cols: #loop thru "Learning rate for <regressor>" df columns
-#             if col.startswith('Learning rate for '):
+        for col in cols: #loop thru "Learning rate for <regressor>" df columns
+            if col.startswith('Learning rate for '):
                 
-#                 # if this neuron's type does not include the regressor specified by this column,
-#                 # mark it as Not Applicable (N/A)
-#                 if col.removeprefix('Learning rate for ') not in neuron_type: 
-#                     learning_rates_df.loc[i,col] = 'N/A' 
+                # if this neuron's type does not include the regressor specified by this column,
+                # mark it as such
+                if col.removeprefix('Learning rate for ') not in neuron_type: 
+                    learning_rate_df.loc[i,col] = 'Does not encode' 
                 
-#     return    
+    return learning_rate_df    
 
 
 
-# def get_learning_rate_change_old(learning_rates_df):
+# def get_learning_rate_change_old(learning_rate_df):
     
-#     df = learning_rates_df
+#     df = learning_rate_df
     
 #     # get names of units (without subsession specification suffix)
-#     unique_units = get_unique_units(df["Unit"])
+#     unique_units = utils.get_unique_units(df["Unit"],SUBSESSIONS)
 
 #     for unit in unique_units:
         
@@ -1989,76 +1939,7 @@ def plot_learning_rate_violins(learning_rates_df,neuron_type_df):
 
 #     return df 
 
-
-def plot_learning_rate_changes(learning_rates_df,neuron_type_df):
-    
-    cols = learning_rates_df.columns
-    
-    # get names of units (without subsession specification suffix)
-    unique_units = get_unique_units(learning_rates_df["Unit"])
-    
-    for col in cols:
-        if 'Q' in col: #only do for value related stuff
-            
-            # Get change in learning rate for all units that encode the current col
-            deltas = []
-            for unit in unique_units:
-                
-                # if this unit encodes the current column over all trials
-                if col.removeprefix('Learning rate for ') in get_unit_data(neuron_type_df,f'{unit} all trials','Neuron Type'):
-    
-                    volatile = learning_rates_df[col][learning_rates_df["Unit"]==f'{unit} volatile block'].values
-                    stable = learning_rates_df[col][learning_rates_df["Unit"]==f'{unit} stable block'].values
-                    
-                    if len(volatile)>0 and len(stable)>0:
-    
-                        deltas.append(stable[0] - volatile[0])
-            
-                    
-            num_units = len(deltas)
-            
-            
-            if num_units > 0:
-                
-                fig,ax=plt.subplots()
-                ax.hist(deltas,bins=20,range=(-1,1))
-                ax.set_xlabel(f'Delta {col}\n(Stable - Volatile)')
-                ax.set_ylabel('Number of neurons')
-                ax.set_xlim([-1,1])
-                [ylo,yhi] = ax.get_ylim()
-                ax.vlines(0,ylo,yhi,color='k',linestyle='--',label='No change')
-                ax.legend()
-                fig.suptitle(f'Total number of {col.removeprefix("Learning rate for ")} units: {num_units}')
-                # ax.set_title(f'Total number of {col.removeprefix("Learning rate for ")} units: {num_units}')
-                # fig.suptitle(self.name)
-                fig.tight_layout()
-                
-                plt.savefig(os.path.join(PROJ_FOLDER,'Figures',f'{col.removeprefix("Learning rate for ")} Learning Rate Deltas.svg'),format="svg")
-                    
-
-    return fig
-        
-
-def get_unique_units(unit_list):
-
-    unit_list = [unit.removesuffix(' stable block') for unit in unit_list]
-    unit_list = [unit.removesuffix(' volatile block') for unit in unit_list]
-    unit_list = [unit.removesuffix(' all trials') for unit in unit_list]
-    
-    return np.unique(np.array(unit_list))
-
-def get_unit_data(df,unit,heading):
-    
-    desired_row = df[df['Unit']==unit]
-
-    if len(desired_row)>0:
-        desired_value = desired_row[heading].values[0]
-    else:
-        desired_value = ''
-
-    return desired_value
-                
-        
+ 
 
 def get_temporal_linear_encoding_regression_results(regressand, regressors):
     '''
@@ -2188,162 +2069,7 @@ def unpack_temporal_encoding_betas(res_list,regressor_labels=None):
 
 
 
-
-def plot_temporal_encoding(temporal_pvals, temporal_betas, regressor_labels, ax_title, sup_title):
-    '''
-    
-
-    Parameters
-    ----------
-    temporal_pvals : array of shape (n_regressors x n_timebins)
-    temporal_betas : array of shape (n_regressors x n_timebins)
-    regressor_labels : list of strs
-    ax_title : str
-    sup_title : str
-    
-    '''
-    assert np.shape(temporal_pvals)[0] == len(regressor_labels)
-    assert np.shape(temporal_pvals)[1] == N_TIMEBINS
-    assert np.all(np.shape(temporal_pvals) == np.shape(temporal_pvals))
-    
-    fig,ax = plt.subplots() 
-    ax.plot(np.arange(N_TIMEBINS),np.zeros((N_TIMEBINS)),'k--') #centerline
-    for j,regressor in enumerate(regressor_labels):
-        to_label=True # for labels
-        
-        for k in range(N_TIMEBINS):
-            
-            if temporal_pvals[j,k]<=0.05:
-                color='red' #significant
-            elif temporal_pvals[j,k]<0.1:
-                color='blue' #trending
-            else:
-                color='grey' #nonsignificant
-                
-            if to_label:
-                label=regressor
-                to_label=False
-            else:
-                label=''
-                
-            ax.plot(k,temporal_betas[j,k],label=label,color=color,marker=MARKERSTYLES[j]) 
-        
-    ax.set_title(ax_title)
-    ax.set_xticks(np.arange(N_TIMEBINS),T_VECTOR)
-    ax.set_ylabel('Beta coef')
-    ax.set_xlabel(f'Time since {ALIGNMENT} (sec)')
-    ax.legend()
-    fig.suptitle(sup_title)
-    fig.tight_layout()
-    plt.show()
-    return fig
-
-
-
-def plot_neuron_type_venns(neuron_type_df, suptitle, fig_folder):
-    # For variable names (e.g. VcO):
-    # uppercase = contains
-    # lowercase = does not contain
-    
-    # Boolean algebra:
-    # * = AND
-    # + = OR
-    
-    # In future, make area and stable vs volatile parameters ??  
-    
-    def count(encoding_str):
-        return sum(neuron_type_df['Neuron Type'].str.contains(encoding_str))
-    
-    def contains(encoding_str):
-        return neuron_type_df['Neuron Type'].str.contains(encoding_str)
-    
-    def no_contains(encoding_str):
-        return ~neuron_type_df['Neuron Type'].str.contains(encoding_str)
-    
-    def plot_venn2(Ab, aB, AB, labelA, labelB):
-        fig,ax = plt.subplots()
-        matplotlib_venn.venn2(subsets = (Ab, aB, AB),
-              set_labels = (labelA, labelB))
-        return fig,ax
-    
-    def plot_venn3(Abc, aBc, ABc, abC, AbC, aBC, ABC, labelA, labelB, labelC):
-        fig,ax = plt.subplots()
-        matplotlib_venn.venn3(subsets = (Abc, aBc, ABc, abC, AbC, aBC, ABC),
-              set_labels = (labelA, labelB, labelC))
-        return fig,ax
-    
-    # value (V) vs choice (C) vs action/time (O)
-    Vco = sum( contains('Q') *       no_contains('Choice') * (no_contains('Side') *   no_contains('Time')) )
-    vCo = sum( no_contains('Q') *    contains('Choice') *    (no_contains('Side') *   no_contains('Time')) )
-    VCo = sum( contains('Q') *       contains('Choice') *    (no_contains('Side') *   no_contains('Time')) )
-    vcO = sum( no_contains('Q') *    no_contains('Choice') * (contains('Side') +      contains('Time')) )
-    VcO = sum( contains('Q') *       no_contains('Choice') * (contains('Side') +      contains('Time')) )
-    vCO = sum( no_contains('Q') *    contains('Choice') *    (contains('Side') +      contains('Time')) )
-    VCO = sum( contains('Q') *       contains('Choice') *    (contains('Side') +      contains('Time')) )
-    fig,ax = plot_venn3(Vco,vCo,VCo,vcO,VcO,vCO,VCO, 'Value','Choice','Other')
-    fig.suptitle(suptitle)
-    utils.save_svg(fig,f'Value-Choice-Other_{suptitle}',fig_folder,PROJ_FOLDER)
-    
-    
-    # relative choice (R) vs target choice (T)
-    Rt = sum( contains('Choice_high') * no_contains('Choice1') )
-    rT = sum( no_contains('Choice_high') * contains('Choice1') )
-    RT = sum( contains('Choice_high') * contains('Choice1') )
-    fig,ax = plot_venn2(Rt,rT,RT, 'Relative Choice','Target Choice')
-    fig.suptitle(suptitle)
-    utils.save_svg(fig,f'RelChoice-TargChoice_{suptitle}',fig_folder,PROJ_FOLDER)
-    
-    # Qdiff_ (D) vs Q1 (I)
-    Di = sum( contains('Qdiff_') *   no_contains('Q1') )
-    dI = sum( no_contains('Qdiff_') *contains('Q1') )
-    DI = sum( contains('Qdiff_') *   contains('Q1') )
-    fig,ax = plot_venn2(Di,dI,DI, 'Qdiff','Q1')
-    fig.suptitle(suptitle)
-    utils.save_svg(fig,f'Qdiff-Q1_{suptitle}',fig_folder,PROJ_FOLDER)
-    
-    # Qhigh (H) vs |Qdiff| (A) vs Qchosen (C)
-    Hac = sum( contains('Qhigh') *       no_contains('absQdiff') * no_contains('Qchosen') )
-    hAc = sum( no_contains('Qhigh') *    contains('absQdiff') *    no_contains('Qchosen') )
-    HAc = sum( contains('Qhigh') *       contains('absQdiff') *    no_contains('Qchosen') )
-    haC = sum( no_contains('Qhigh') *    no_contains('absQdiff') * contains('Qchosen') )
-    HaC = sum( contains('Qhigh') *       no_contains('absQdiff') * contains('Qchosen') )
-    hAC = sum( no_contains('Qhigh') *    contains('absQdiff') *    contains('Qchosen') )
-    HAC = sum( contains('Qhigh') *       contains('absQdiff') *    contains('Qchosen') )
-    fig,ax = plot_venn3(Hac,hAc,HAc,haC,HaC,hAC,HAC, 'Qhigh','|Qdiff|','Qchosen')
-    fig.suptitle(suptitle)
-    utils.save_svg(fig,f'Qhigh-absQdiff-Qchosen_{suptitle}',fig_folder,PROJ_FOLDER)
-    
-    # Qdiff_/Q1 (N) vs Qhigh/Qchosen/|Qdiff| (M)
-    Nm = sum( (contains('Qdiff_') +  contains('Q1')) * \
-            (no_contains('Qhigh') * no_contains('Qchosen') * no_contains('absQdiff')) )
-            
-    nM = sum( (no_contains('Qdiff_') *  no_contains('Q1')) * \
-            (contains('Qhigh') + contains('Qchosen') + contains('absQdiff')) )
-            
-    NM = sum( (contains('Qdiff_') +  contains('Q1')) * \
-            (contains('Qhigh') + contains('Qchosen') + contains('absQdiff')) )
-    fig,ax = plot_venn2(Nm,nM,NM, 'Qdiff/Q1','Qhigh/Qchosen/|Qdiff|')
-    fig.suptitle(suptitle)
-    utils.save_svg(fig,f'Q1-Qhigh_{suptitle}',fig_folder,PROJ_FOLDER)
-    
-    
-    # Bar chart of all regressors 
-    counts=[]
-    for reg in REGRESSORS:
-        counts.append(count(reg))
-    
-    idx_sort = np.argsort(counts)   
-    fig,ax = plt.subplots()
-    ax.bar(np.array(REGRESSORS)[idx_sort[::-1]],np.array(counts)[idx_sort[::-1]])
-    ax.set_ylabel('Num Neurons')
-    for tick in ax.xaxis.get_major_ticks()[1::2]:
-        tick.set_pad(15)
-    fig.suptitle(suptitle)
-    utils.save_svg(fig, f'RegBarChart_{suptitle}', fig_folder,PROJ_FOLDER)
-    
-    return
-
-    
+ 
 
 # def regressor_selection_table():
     
@@ -2353,14 +2079,14 @@ def plot_neuron_type_venns(neuron_type_df, suptitle, fig_folder):
 #     for i,session in enumerate(SESSIONS):
         
 #         Spikes = ProcessSpikes(session)
-#         units = list(Spikes.firing_rate_df.columns)
+#         units = list(Spikes.fr_df.columns)
         
 #         Behav = ProcessBehavior(session)
 #         behavior_df = Behav.behavior_df
 
         
 #         for j,unit in enumerate(units):
-#             fr = Spikes.firing_rate_df[unit]
+#             fr = Spikes.fr_df[unit]
                      
 #             # lasso (regularization feature selection)
 #             score,coefs = lasso_regression(fr,behavior_df[master_regressor_list],regularization_strength = 0.1)
@@ -2388,50 +2114,61 @@ def plot_neuron_type_venns(neuron_type_df, suptitle, fig_folder):
 #### Helper Methods #######################################################
 
 def neuron_typing_helper(fr_df,behavior_df):
-
-        encodings = []
-        unit_labels = []
-        neuron_type_df = None
-        for stable_or_volatile in SUBSESSIONS:
-            
-            trials = utils.get_trials(behavior_df,stable_or_volatile)
-            
-            if len(trials) < 1:
-                return None #skip regression if there aren't any trials for this subsession
-            
-            n_regressors = len(REGRESSORS)
-            regressor_matrix = behavior_df[REGRESSORS].iloc[trials] #shape = (trials x regressors)
-            
-            area_fr_df = utils.area_parser(fr_df,'all areas')
-            units = list(area_fr_df.keys())
-            
-            if len(units) < 1:
-                return None #skip regression if there aren't any units for this session
-            
-            # assert ALIGNMENT == 'Targets On', 'Only set up for hold_center atm'
-            # win = (T_VECTOR>=0) * (T_VECTOR<=HOLD_DURATION) #to get num_spikes only over actual hold period
-            
-            ## Run regression for each unit against regressors
-            for i,unit in enumerate(units): #loop thru all units of session
-
-                # fr = np.mean(area_psth_dict[unit][np.ix_(trials,win)],axis=1) # shape = 1 x n_trials
-                fr = fr_df[unit].iloc[trials] # shape = 1 x n_trials
+    coefs=[]
+    encodings = []
+    unit_labels = []
+    neuron_type_df = None
+    for stable_or_volatile in SUBSESSIONS:
         
-                res = utils.linear_encoding_regression(fr, regressor_matrix)
-                
-                pvals = res.pvalues[1:] #exclude constant (position 0)
-                
-                if res.f_pvalue < ALPHA_THRESHOLD:
-                    signif_regressors = [str(feat) for feat in np.array(REGRESSORS)[pvals < ALPHA_THRESHOLD]]
-                else:
-                    signif_regressors = ['']
-                    
-                encodings.append(signif_regressors)
-                unit_labels.append(f'{unit} - {stable_or_volatile}')
+        trials = utils.get_trials(behavior_df,stable_or_volatile)
         
-        neuron_type_df =  pd.DataFrame.from_dict({'Unit':unit_labels, 'Neuron Type':encodings})
-         
-        return neuron_type_df
+        if len(trials) < 1:
+            continue #skip iteration if there aren't any trials for this subsession
+        
+        # n_regressors = len(REGRESSORS)
+        # regressor_matrix = behavior_df[REGRESSORS].iloc[trials] #shape = (trials x regressors)
+        
+        area_fr_df = utils.area_parser(fr_df,'all areas')
+        units = list(area_fr_df.keys())
+        
+        if len(units) < 1:
+            return None #skip whole thing if there aren't any units for this session
+        
+        # assert ALIGNMENT == 'Targets On', 'Only set up for hold_center atm'
+        # win = (T_VECTOR>=0) * (T_VECTOR<=HOLD_DURATION) #to get num_spikes only over actual hold period
+        
+        ## Run regression for each unit against regressors
+        for i,unit in enumerate(units): #loop thru all units of session
+
+            # fr = np.mean(area_psth_dict[unit][np.ix_(trials,win)],axis=1) # shape = 1 x n_trials
+            # fr = fr_df[unit].iloc[trials] # shape = 1 x n_trials
+            
+            # linear reg
+            signif_regressors = utils.linear_encoding_regression_feature_selection(
+                REGRESSORS,fr_df[unit].iloc[trials],behavior_df.iloc[trials],ALPHA_THRESHOLD)
+            
+            # #data regularization
+            # signif_regressors,coef = utils.regularization_regression_feature_selection(
+            #     REGRESSORS,fr_df[unit].iloc[trials],behavior_df.iloc[trials],'lasso',0.001,1e-4)
+            # coefs.append(coef)    
+    
+            # res = utils.linear_encoding_regression(fr, regressor_matrix)
+            
+            # pvals = res.pvalues[1:] #exclude constant (position 0)
+            
+            # if res.f_pvalue < ALPHA_THRESHOLD:
+            #     signif_regressors = str([str(feat) for feat in np.array(REGRESSORS)[pvals < ALPHA_THRESHOLD]])
+            #     if len(signif_regressors) < 1:
+            #         signif_regressors = 'none'
+            # else:
+            #     signif_regressors = 'none'
+                
+            encodings.append(signif_regressors)
+            unit_labels.append(f'{unit} - {stable_or_volatile}')
+    
+    neuron_type_df =  pd.DataFrame.from_dict({'Unit':unit_labels, 'Neuron Type':encodings})
+     
+    return neuron_type_df, coefs
 
 
 def learning_rate_helper(fr_df,Behavior,neuron_type_df):
@@ -2479,7 +2216,7 @@ def learning_rate_helper(fr_df,Behavior,neuron_type_df):
             regression_weights_df = pd.DataFrame(df_rows_regression_weights)
             
             # Find learning rate which maximizes each regression weight
-            unit_subsession_labeled = f'{unit} {stable_or_volatile}'
+            unit_subsession_labeled = f'{unit} - {stable_or_volatile}'
             row_dict_learning_rates = {'Unit':unit_subsession_labeled}
             for j in range(len(REGRESSORS)):
                 
@@ -2496,18 +2233,21 @@ def learning_rate_helper(fr_df,Behavior,neuron_type_df):
             
     learning_rate_df = pd.DataFrame(df_rows_learning_rates) #rows: units x subsessions, cols: lrs for each reg
     
+    #filter so that learning rates are only displayed for regressors that are encoded by that unit
+    # learning_rate_df = filter_learning_rates(learning_rate_df,neuron_type_df) INTERFERES WITH plot_learning_rate_changes_hist I THINK
+    
     return learning_rate_df
 
 def temporal_encoding_PCA_helper(pca_data,behavior_df,stable_or_volatile):
         
         trials = utils.get_trials(behavior_df,stable_or_volatile)
         if len(trials) < 1:
-            return None #skip regression if there aren't any trials for this subsession
+            return None, None #skip regression if there aren't any trials for this subsession
     
         regressor_matrix = behavior_df[REGRESSORS].iloc[trials] #shape = (trials x regressors)
         
         if len(pca_data) < 1:
-            return None #skip regression if there aren't any unit for this area
+            return None, None #skip regression if there aren't any unit for this area
             
         
         res_list = get_temporal_linear_encoding_regression_results(pca_data[trials,:], regressor_matrix) #len(res_list) = n_timepoints
@@ -2558,12 +2298,12 @@ def temporal_encoding_LFP_helper(band_power_area,behavior_df,stable_or_volatile)
         
         trials = utils.get_trials(behavior_df,stable_or_volatile)
         if len(trials) < 1:
-            return None #skip regression if there aren't any trials for this subsession
+            return None, None #skip regression if there aren't any trials for this subsession
         
         n_regressors = len(REGRESSORS)
         regressor_matrix = behavior_df[REGRESSORS].iloc[trials] #shape = (trials x regressors)
         
-        res_list = get_temporal_linear_encoding_regression_results(band_power_area, regressor_matrix) #len=n_timepoints
+        res_list = get_temporal_linear_encoding_regression_results(band_power_area[trials], regressor_matrix) #len=n_timepoints
 
         ## Unpack p-values and beta coefs for each regressor for each timebin
         temporal_pvals = unpack_temporal_encoding_pvals(res_list,REGRESSORS) #shape = regs x timiebins
@@ -2769,7 +2509,7 @@ def plot_trajs_gif(trajs, labels, n_dims):
     return 
 
 
-def plot_temporal_encoding_spikes(temporal_pvals, area, stable_or_volatile,ax_title,sup_title):
+def plot_temporal_encoding_spikes(temporal_pvals, area, stable_or_volatile,ax_title,suptitle):
     
     n_units = np.shape(temporal_pvals)[0]
     assert np.shape(temporal_pvals)[1] == len(REGRESSORS), f'{np.shape(temporal_pvals[1])} != len(REGRESSORS)'
@@ -2798,14 +2538,378 @@ def plot_temporal_encoding_spikes(temporal_pvals, area, stable_or_volatile,ax_ti
     ax.set_xlabel(f'Time since {ALIGNMENT}')
     ax.set_xticks(np.arange(N_TIMEBINS),T_VECTOR)
     ax.set_title(ax_title)
-    fig.suptitle(sup_title)
+    fig.suptitle(suptitle)
     fig.tight_layout()
     
     return fig
 
 
+def plot_temporal_encoding(temporal_pvals, temporal_betas, regressor_labels, ax_title, suptitle):
+    '''
+    
+
+    Parameters
+    ----------
+    temporal_pvals : array of shape (n_regressors x n_timebins)
+    temporal_betas : array of shape (n_regressors x n_timebins)
+    regressor_labels : list of strs
+    ax_title : str
+    suptitle : str
+    
+    '''
+    assert np.shape(temporal_pvals)[0] == len(regressor_labels)
+    assert np.shape(temporal_pvals)[1] == N_TIMEBINS
+    assert np.all(np.shape(temporal_pvals) == np.shape(temporal_pvals))
+    
+    fig,ax = plt.subplots() 
+    ax.plot(np.arange(N_TIMEBINS),np.zeros((N_TIMEBINS)),'k--') #centerline
+    for j,regressor in enumerate(regressor_labels):
+        to_label=True # for labels
+        
+        for k in range(N_TIMEBINS):
+            
+            if temporal_pvals[j,k]<=0.05:
+                color='red' #significant
+            elif temporal_pvals[j,k]<0.1:
+                color='blue' #trending
+            else:
+                color='grey' #nonsignificant
+                
+            if to_label:
+                label=regressor
+                to_label=False
+            else:
+                label=''
+                
+            ax.plot(k,temporal_betas[j,k],label=label,color=color,marker=MARKERSTYLES[j]) 
+        
+    ax.set_title(ax_title)
+    ax.set_xticks(np.arange(N_TIMEBINS),T_VECTOR)
+    ax.set_ylabel('Beta coef')
+    ax.set_xlabel(f'Time since {ALIGNMENT} (sec)')
+    ax.legend()
+    fig.suptitle(suptitle)
+    fig.tight_layout()
+    plt.show()
+    return fig
 
 
+
+def plot_neuron_type_venns(neuron_type_df, suptitle, fig_folder):
+    # For variable names (e.g. VcO):
+    # uppercase = contains
+    # lowercase = does not contain
+    
+    # Boolean algebra:
+    # * = AND
+    # + = OR
+    
+    # In future, make area and stable vs volatile parameters ??  
+    
+    def count(encoding_str):
+        return sum(neuron_type_df['Neuron Type'].str.contains(encoding_str))
+    
+    def contains(encoding_str):
+        return neuron_type_df['Neuron Type'].str.contains(encoding_str)
+    
+    def no_contains(encoding_str):
+        return ~neuron_type_df['Neuron Type'].str.contains(encoding_str)
+    
+    def plot_venn2(Ab, aB, AB, labelA, labelB):
+        fig,ax = plt.subplots()
+        matplotlib_venn.venn2(subsets = (Ab, aB, AB),
+              set_labels = (labelA, labelB))
+        return fig,ax
+    
+    def plot_venn3(Abc, aBc, ABc, abC, AbC, aBC, ABC, labelA, labelB, labelC):
+        fig,ax = plt.subplots()
+        matplotlib_venn.venn3(subsets = (Abc, aBc, ABc, abC, AbC, aBC, ABC),
+              set_labels = (labelA, labelB, labelC))
+        return fig,ax
+    
+    # value (V) vs choice (C) vs action/time (O)
+    Vco = sum( contains('Q') *       no_contains('Choice') * (no_contains('Side') *   no_contains('Time')) )
+    vCo = sum( no_contains('Q') *    contains('Choice') *    (no_contains('Side') *   no_contains('Time')) )
+    VCo = sum( contains('Q') *       contains('Choice') *    (no_contains('Side') *   no_contains('Time')) )
+    vcO = sum( no_contains('Q') *    no_contains('Choice') * (contains('Side') +      contains('Time')) )
+    VcO = sum( contains('Q') *       no_contains('Choice') * (contains('Side') +      contains('Time')) )
+    vCO = sum( no_contains('Q') *    contains('Choice') *    (contains('Side') +      contains('Time')) )
+    VCO = sum( contains('Q') *       contains('Choice') *    (contains('Side') +      contains('Time')) )
+    fig,ax = plot_venn3(Vco,vCo,VCo,vcO,VcO,vCO,VCO, 'Value','Choice','Other')
+    fig.suptitle(suptitle)
+    utils.save_svg(fig,f'Value-Choice-Other_{suptitle}',fig_folder,PROJ_FOLDER)
+    
+    
+    # relative choice (R) vs target choice (T)
+    Rt = sum( contains('Choice_high') * no_contains('Choice1') )
+    rT = sum( no_contains('Choice_high') * contains('Choice1') )
+    RT = sum( contains('Choice_high') * contains('Choice1') )
+    fig,ax = plot_venn2(Rt,rT,RT, 'Relative Choice','Target Choice')
+    fig.suptitle(suptitle)
+    utils.save_svg(fig,f'RelChoice-TargChoice_{suptitle}',fig_folder,PROJ_FOLDER)
+    
+    # Qdiff_ (D) vs Q1 (I)
+    Di = sum( contains('Qdiff_') *   no_contains('Q1') )
+    dI = sum( no_contains('Qdiff_') *contains('Q1') )
+    DI = sum( contains('Qdiff_') *   contains('Q1') )
+    fig,ax = plot_venn2(Di,dI,DI, 'Qdiff','Q1')
+    fig.suptitle(suptitle)
+    utils.save_svg(fig,f'Qdiff-Q1_{suptitle}',fig_folder,PROJ_FOLDER)
+    
+    # Qhigh (H) vs |Qdiff| (A) vs Qchosen (C)
+    Hac = sum( contains('Qhigh') *       no_contains('absQdiff') * no_contains('Qchosen') )
+    hAc = sum( no_contains('Qhigh') *    contains('absQdiff') *    no_contains('Qchosen') )
+    HAc = sum( contains('Qhigh') *       contains('absQdiff') *    no_contains('Qchosen') )
+    haC = sum( no_contains('Qhigh') *    no_contains('absQdiff') * contains('Qchosen') )
+    HaC = sum( contains('Qhigh') *       no_contains('absQdiff') * contains('Qchosen') )
+    hAC = sum( no_contains('Qhigh') *    contains('absQdiff') *    contains('Qchosen') )
+    HAC = sum( contains('Qhigh') *       contains('absQdiff') *    contains('Qchosen') )
+    fig,ax = plot_venn3(Hac,hAc,HAc,haC,HaC,hAC,HAC, 'Qhigh','|Qdiff|','Qchosen')
+    fig.suptitle(suptitle)
+    utils.save_svg(fig,f'Qhigh-absQdiff-Qchosen_{suptitle}',fig_folder,PROJ_FOLDER)
+    
+    # Qdiff_/Q1 (N) vs Qhigh/Qchosen/|Qdiff| (M)
+    Nm = sum( (contains('Qdiff_') +  contains('Q1')) * \
+            (no_contains('Qhigh') * no_contains('Qchosen') * no_contains('absQdiff')) )
+            
+    nM = sum( (no_contains('Qdiff_') *  no_contains('Q1')) * \
+            (contains('Qhigh') + contains('Qchosen') + contains('absQdiff')) )
+            
+    NM = sum( (contains('Qdiff_') +  contains('Q1')) * \
+            (contains('Qhigh') + contains('Qchosen') + contains('absQdiff')) )
+    fig,ax = plot_venn2(Nm,nM,NM, 'Qdiff/Q1','Qhigh/Qchosen/|Qdiff|')
+    fig.suptitle(suptitle)
+    utils.save_svg(fig,f'Q1-Qhigh_{suptitle}',fig_folder,PROJ_FOLDER)
+    
+    
+    # Bar chart of all regressors 
+    counts=[]
+    for reg in REGRESSORS:
+        counts.append(count(reg))
+    
+    idx_sort = np.argsort(counts)   
+    fig,ax = plt.subplots()
+    ax.bar(np.array(REGRESSORS)[idx_sort[::-1]],np.array(counts)[idx_sort[::-1]])
+    ax.set_ylabel('Num Neurons')
+    for tick in ax.xaxis.get_major_ticks()[1::2]:
+        tick.set_pad(15)
+    fig.suptitle(suptitle)
+    utils.save_svg(fig, f'RegBarChart_{suptitle}', fig_folder,PROJ_FOLDER)
+    
+    return
+
+   
+
+
+def plot_learning_rate_violins(learning_rate_df,neuron_type_df,suptitle,fig_folder): 
+    
+    cols = learning_rate_df.columns
+    areas = AREAS + ['all areas']
+    
+    for i,area in enumerate(areas):
+        
+        area_neuron_type_df = utils.area_parser(neuron_type_df,area)
+        area_learning_rate_df = utils.area_parser(learning_rate_df,area)
+        
+        if area_learning_rate_df.empty: # if no units for this area, skip
+            continue
+        
+        unique_units = utils.get_unique_units(area_learning_rate_df["Unit"],SUBSESSIONS)
+        
+        for col in cols:
+            if 'Q' in col: #only do for value related stuff
+                
+                col_noprefix = col.removeprefix('Learning rate for ')
+                learning_rates_list = [] #list of lists of lrs for each subsession
+                subsession_labels = []
+                for subsession in SUBSESSIONS:
+                    
+                    # Get learning rate for all units that encode this col for this subsession
+                    learning_rates = []
+                    for unit in unique_units:
+                        unit_subsession_labeled = f'{unit} - {subsession}'
+                        
+                        # print(utils.get_unit_data(area_learning_rate_df,unit_subsession_labeled,col))
+                        # print(utils.get_unit_data(area_neuron_type_df,unit_subsession_labeled,'Neuron Type'))
+                        # xx
+                        # if this unit encodes the current column during this subsession
+                        if col_noprefix in utils.get_unit_data(area_neuron_type_df,unit_subsession_labeled,'Neuron Type'):
+    
+                            learning_rates.append(utils.get_unit_data(area_learning_rate_df,unit_subsession_labeled,col))
+                            # learning_rates.append(learning_rate_df[col][learning_rate_df["Unit"]==f'{unit} - {subsession}'].values)
+                            # print(f'{unit} {subsession}')
+                            # print(col)
+                            # print(utils.get_unit_data(neuron_type_df,f'{unit} {subsession}','Neuron Type'))
+                            # print(learning_rate_df[col][learning_rate_df["Unit"]==f'{unit} {subsession}'].values)
+                            # xxx
+            
+                    if len(learning_rates)>0:
+                        learning_rates_list.append(np.array(learning_rates).flatten())
+                        subsession_labels.append(subsession + f'\nnum_units: {len(learning_rates)}')
+                
+                if len(learning_rates_list) > 0:
+                    # print(learning_rates_list)
+                    fig,ax=plt.subplots()
+                    violin = ax.violinplot(learning_rates_list)#,bins=10,range=(0,1))
+                    for pc in violin['bodies']:
+                        pc.set_facecolor(COLORS[i])
+                        pc.set_edgecolor(COLORS[i])
+                    ax.set_xticks(np.arange(1,len(learning_rates_list)+1),subsession_labels)
+                    ax.set_ylabel(col)
+                    ax.set_ylim([-0.1,1.1])
+                    fig.suptitle(suptitle)
+                    ax.set_title(f'{area}\n{col_noprefix}')
+                    fig.tight_layout()
+                    
+                    utils.save_svg(fig,f'{suptitle}_{area}_{col_noprefix}_violin',fig_folder,PROJ_FOLDER)
+                    
+                    
+                else:
+                    print(f'{subsession} skipped!')
+                        
+    return 
+
+
+def plot_learning_rate_changes_hist(learning_rate_df,neuron_type_df,suptitle,fig_folder):
+    
+    cols = learning_rate_df.columns
+    areas = AREAS + ['all areas']
+    
+    areas = AREAS + ['all areas']
+    
+    for i,area in enumerate(areas):
+        
+        area_neuron_type_df = utils.area_parser(neuron_type_df,area)
+        area_learning_rate_df = utils.area_parser(learning_rate_df,area)
+        
+        if area_learning_rate_df.empty: # if no units for this area, skip
+            continue
+        
+        unique_units = utils.get_unique_units(area_learning_rate_df["Unit"],SUBSESSIONS)
+    
+        for col in cols:
+            if 'Q' in col: #only do for value related stuff
+                
+                col_noprefix = col.removeprefix('Learning rate for ')
+            
+                # Get change in learning rate for all units that encode the current col
+                deltas = []
+                for unit in unique_units:
+                    
+                    # if this unit encodes the current column over all trials
+                    if col_noprefix in utils.get_unit_data(area_neuron_type_df,f'{unit} - {SUBSESSIONS[0]}','Neuron Type'):
+        
+                        volatile = utils.get_unit_data(area_learning_rate_df,f'{unit} - {SUBSESSIONS[2]}',col)
+                        stable = utils.get_unit_data(area_learning_rate_df,f'{unit} - {SUBSESSIONS[1]}',col)
+                        
+                        if volatile and stable: #if they exist (empty string is falsey)
+                            deltas.append(stable - volatile)
+                            
+                num_units = len(deltas)
+                
+                
+                if num_units > 0:
+                    fig,ax=plt.subplots()
+                    ax.hist(deltas,bins=20,range=(-1,1),color=COLORS[i])
+                    ax.set_xlabel(f'Delta {col}\n(Stable minus Volatile)')
+                    ax.set_ylabel('Number of neurons')
+                    ax.set_xlim([-1.1,1.1])
+                    [ylo,yhi] = ax.get_ylim()
+                    ax.vlines(0,ylo,yhi,color='k',linestyle='--',label='No change')
+                    ax.legend()
+                    ax.set_title(f'Total number of {col_noprefix} {area} units: {num_units}')
+                    # ax.set_title(f'Total number of {col.removeprefix("Learning rate for ")} units: {num_units}')
+                    fig.suptitle(suptitle)
+                    fig.tight_layout()
+                    
+                    utils.save_svg(fig,f'{suptitle}_{area}_{col_noprefix}_changes_hist',fig_folder,PROJ_FOLDER)    
+
+    return
+
+
+
+def plot_learning_rate_paired_changes(learning_rate_df,neuron_type_df,suptitle,fig_folder):
+    
+    cols = learning_rate_df.columns
+    
+    areas = AREAS + ['all areas']
+    
+    for i,area in enumerate(areas):
+        
+        area_neuron_type_df = utils.area_parser(neuron_type_df,area)
+        area_learning_rate_df = utils.area_parser(learning_rate_df,area)
+        
+        print(area)
+        if area_learning_rate_df.empty: # if no units for this area, skip
+            print('skipped!')
+            continue
+        
+        unique_units = utils.get_unique_units(area_learning_rate_df["Unit"],SUBSESSIONS)
+        
+        for col in cols:
+            if 'Q' in col: #only do for value related stuff
+                
+                col_noprefix = col.removeprefix('Learning rate for ')
+            
+                # Get change in learning rate for all units that encode the current col
+                vols = []
+                stabs = []
+                for unit in unique_units:
+                    
+                    # if this unit encodes the current column over all trials
+                    if col_noprefix in utils.get_unit_data(area_neuron_type_df,f'{unit} - {SUBSESSIONS[0]}','Neuron Type'):
+        
+                        volatile = utils.get_unit_data(area_learning_rate_df,f'{unit} - {SUBSESSIONS[2]}',col)
+                        stable = utils.get_unit_data(area_learning_rate_df,f'{unit} - {SUBSESSIONS[1]}',col)
+                        
+                        if volatile and stable: #if they exist (empty string is falsey)
+                            vols.append(volatile)
+                            stabs.append(stable)
+                            
+                assert len(vols) == len(stabs)            
+                num_units = len(vols)
+                
+                if num_units > 0:
+                    fig,ax=plt.subplots()
+                    
+                    x_vol, x_stab = 1, 2
+                    color_increase, color_decrease = 'gray', COLORS[i]
+                    
+                    for vol,stab in zip(vols,stabs):
+                        color = color_increase if stab >= vol else color_decrease
+                        
+                        #individal points
+                        ax.plot([x_vol, x_stab], [vol, stab], color=color) #connecting lines
+                        ax.scatter([x_vol, x_stab], [vol, stab], color=color) #individual dots
+                        
+                    #means
+                    ax.plot([x_vol, x_stab], [np.mean(vols), np.mean(stabs)], color='k',linewidth=2) #connecting lines
+                    ax.scatter([x_vol, x_stab], [np.mean(vols), np.mean(stabs)], color='k',linewidth=2,marker="D") #individual dots 
+                        
+                        
+                    ax.set_xlim(0.8, 2.2)
+                    ax.set_ylim(-0.1, 1.1)
+                    ax.set_xticks([x_vol, x_stab])
+                    ax.set_xticklabels(["Volatile", "Stable"], fontsize=12, fontweight="bold")
+                    ax.set_ylabel("Learning Rate", fontsize=12)
+                    
+                    legend_handles = [
+                        mpatches.Patch(color=color_increase, label="Increased"),
+                        mpatches.Patch(color=color_decrease, label="Decreased"),
+                        plt.Line2D([0], [0], color='k', marker="D", markersize=7,
+                                   label="Mean", linewidth=2),
+                    ]
+                    ax.legend(handles=legend_handles, fontsize=8.5, frameon=False,
+                              loc="upper left", labelcolor="#444")
+                    ax.set_title(f'Total number of {area} {col_noprefix} units: {num_units}')
+                    # ax.set_title(f'Total number of {col.removeprefix("Learning rate for ")} units: {num_units}')
+                    fig.suptitle(suptitle)
+                    fig.tight_layout()
+                    
+                    utils.save_svg(fig,f'{suptitle}_{area}_{col_noprefix}_paired_changes',fig_folder,PROJ_FOLDER)    
+
+    return
+        
 
 #### Run Methods #######################################################
 
@@ -2815,6 +2919,7 @@ def run_neuron_typing(overwrite_flag=False):
     fig_folder = 'NeuronTypeVenns'
        
     dfs = []
+    coefs = []
     for s,session in enumerate(SESSIONS):
         
         #Get encodings
@@ -2822,23 +2927,41 @@ def run_neuron_typing(overwrite_flag=False):
             neuron_type_df = utils.load_csv('NeuronTypes',session,DATA_FOLDER)
         else: #don't load, compute
             Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-            neuron_type_df = neuron_typing_helper(Spikes.fr_df,Behav.behavior_df)
-            utils.save_csv(neuron_type_df,'NeuronTypes',session,DATA_FOLDER)
-        dfs.append(neuron_type_df)
+            neuron_type_df,coef = neuron_typing_helper(Spikes.fr_df,Behav.behavior_df)
+            coefs.append(coef)
+            if neuron_type_df is not None:
+                utils.save_csv(neuron_type_df,'NeuronTypes',session,DATA_FOLDER)
+            else:
+                print(f'{session} yielded no neuron types!')
+                
+        if neuron_type_df is not None:        
+            dfs.append(neuron_type_df)
         
-        # #Plot
-        # for stable_or_volatile in SUBSESSIONS:
-        #     subsession_df = neuron_type_df[neuron_type_df['Unit'].str.contains(stable_or_volatile)]
-        #     sup_title = f'{session} - {stable_or_volatile}'
-        #     plot_neuron_type_venns(subsession_df,sup_title,fig_folder)
-        
-        
+            # #Plot
+            # for stable_or_volatile in SUBSESSIONS:
+            #     subsession_df = neuron_type_df[neuron_type_df['Unit'].str.contains(stable_or_volatile)]
+            #     suptitle = f'{session} - {stable_or_volatile}'
+            #     plot_neuron_type_venns(subsession_df,suptitle,fig_folder)
+    
+    # plot hist of lasso/ridge coefficients        
+    fig,axs = plt.subplots(2,1)
+    range_ = (-1.5,2.5)
+    ax=axs[0]
+    ax.hist(np.array(utils.flatten(coefs)),range=range_)
+    ax.set_xlabel('all coefs of data regularization regressions')
+    ax.set_ylabel('Num')
+    ax.legend(REGRESSORS)
+    ax=axs[1]
+    ax.hist(np.array(utils.flatten(coefs)).flatten(),range=range_,bins=50)
+    ax.set_xlabel('all coefs of data regularization regressions')
+    ax.set_ylabel('Num')
+    
     
     sessavg_df = utils.merge_sessions_df(dfs)
-    for stable_or_volatile in SUBSESSIONS:
-        subsession_df = sessavg_df[sessavg_df['Unit'].str.contains(stable_or_volatile)]
-        sup_title = f'SessionAvg - {stable_or_volatile}'
-        plot_neuron_type_venns(subsession_df,sup_title,fig_folder)
+    # for stable_or_volatile in SUBSESSIONS:
+    #     subsession_df = sessavg_df[sessavg_df['Unit'].str.contains(stable_or_volatile)]
+    #     suptitle = f'SessionAvg - {stable_or_volatile}'
+    #     plot_neuron_type_venns(subsession_df,suptitle,fig_folder)
 
     return sessavg_df
 
@@ -2846,9 +2969,11 @@ def run_learning_rate(overwrite_flag=False):
     
     fig_folder = 'LearningRates'
        
-    dfs = []
+    lr_dfs = []
+    nt_dfs = []
     for s,session in enumerate(SESSIONS):
         
+        start = time.time()
         #Get encodings
         try:
             neuron_type_df = utils.load_csv('NeuronTypes',session,DATA_FOLDER)
@@ -2863,21 +2988,30 @@ def run_learning_rate(overwrite_flag=False):
             Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
             learning_rate_df = learning_rate_helper(Spikes.fr_df,Behav,neuron_type_df)
             utils.save_csv(learning_rate_df,'LearningRates',session,DATA_FOLDER)
-        dfs.append(learning_rate_df)
+        lr_dfs.append(learning_rate_df)
+        nt_dfs.append(neuron_type_df)
         
         #Plot
-        sup_title = f'{session}'
-        plot_learning_rate_violins(learning_rate_df,sup_title,fig_folder) NEEDS TO BE UPDATED WITH TITLE AND SAVE INFO I THINK
-        plot_learning_rate_changes(learning_rate_df,sup_title,fig_folder) SAME ^ BUT ALSO NEESD TO ADD CONNECTED DOT PLOT
+        # suptitle = f'{session}'
+        # plot_learning_rate_violins(learning_rate_df,neuron_type_df,suptitle,fig_folder) 
+        # plot_learning_rate_changes_hist(learning_rate_df,neuron_type_df,suptitle,fig_folder) 
+        # plot_learning_rate_paired_changes(learning_rate_df,neuron_type_df,suptitle,fig_folder)
+        # xxx
+        
+        utils.get_time_left(start,s,len(SESSIONS))
         
         
          
-    sessavg_df = utils.merge_sessions_df(dfs)
-    sup_title = 'SessionAvg'
-    plot_learning_rate_violins(sessavg_df,sup_title,fig_folder)
-    plot_learning_rate_changes(sessavg_df,sup_title,fig_folder)
+    allsess_lr_df = utils.merge_sessions_df(lr_dfs)
+    allsess_nt_df = utils.merge_sessions_df(nt_dfs)
+    utils.save_csv(allsess_lr_df,'LearningRates','',DATA_FOLDER)
+    utils.save_csv(allsess_nt_df,'NeuronTypes','',DATA_FOLDER)
+    suptitle = 'AllSessions'
+    plot_learning_rate_violins(allsess_lr_df,allsess_nt_df,suptitle,fig_folder)
+    plot_learning_rate_changes_hist(allsess_lr_df,allsess_nt_df,suptitle,fig_folder)
+    plot_learning_rate_paired_changes(allsess_lr_df,allsess_nt_df,suptitle,fig_folder)
 
-    return dfs
+    return lr_dfs, nt_dfs
 
 
 def run_temporal_encodings_PCA():
@@ -2885,7 +3019,7 @@ def run_temporal_encodings_PCA():
     fig_folder = 'PCAvsBehav'
     stable_or_volatile = 'all_trials'
      
-    for s,session in SESSIONS:
+    for s,session in enumerate(SESSIONS):
         Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
         
         for j,area in enumerate(AREAS):
@@ -2896,18 +3030,20 @@ def run_temporal_encodings_PCA():
                 
                 PCA_data = PCA.get_timebin_data_transformed() #components x trials x timebins
                 
-                for comp in range(PCA.n_comps):
-                    
-                    # shape = (n_comp, n_reg, ntimebins)
-                    temporal_pvals, temporal_betas = \
-                        temporal_encoding_PCA_helper( PCA_data[comp,:,:],Behav.behavior_df,stable_or_volatile)
+                for stable_or_volatile in SUBSESSIONS:
                 
-                
-                    
-                    ax_title = f'Temporal Encoding, PCA vs Behavior\n{area}'
-                    sup_title = session
-                    fig = plot_temporal_encoding(temporal_pvals, temporal_betas, REGRESSORS, ax_title, sup_title)
-                    utils.save_svg(fig,f'{area}_{stable_or_volatile}_{session}',fig_folder,PROJ_FOLDER)
+                    for comp in range(PCA.n_comp):
+                        
+                        if len(utils.get_trials(Behav.behavior_df, stable_or_volatile)) > 0:
+                            
+                            # shape = (n_comp, n_reg, ntimebins)
+                            temporal_pvals, temporal_betas = \
+                                temporal_encoding_PCA_helper(PCA_data[comp,:,:],Behav.behavior_df,stable_or_volatile)
+                            
+                            ax_title = f'Temporal Encoding, PCA vs Behavior\n{area}'
+                            suptitle = session
+                            fig = plot_temporal_encoding(temporal_pvals, temporal_betas, REGRESSORS, ax_title, suptitle)
+                            utils.save_svg(fig,f'{area}_{stable_or_volatile}_{session}',fig_folder,PROJ_FOLDER)
     
     # not doing across session avging because I don't think we can assume population activity decompositions
     # will be comparable from session to session since we are never recording from the same set of neurons
@@ -2926,9 +3062,9 @@ def run_PCA_trajectories():
     for s,(session,area) in enumerate(zip(sessions,areas)):
         
         Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-        pca_ = PCA_Spike_Analysis(session,area,Spikes,Behav)
+        PCA = PCA_Spike_Analysis(session,area,Spikes,Behav)
         
-        trajs.append(np.stack([pca_.avg_traj_stab,pca_.avg_traj_vol]))
+        trajs.append(np.stack([PCA.avg_traj_stab,PCA.avg_traj_vol]))
         labels.append(area)
     
 
@@ -2969,15 +3105,18 @@ def run_temporal_encodings_spikes():
             
             for s,session in enumerate(SESSIONS):
                 Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+                
                 temporal_pvals = temporal_encoding_spikes_helper(Spikes.psth_dict,Behav.behavior_df,
                                                       area,stable_or_volatile) # units x regs x timebins
-                if temporal_pvals is not None:
+                
+                if temporal_pvals is not None: #check if no trials for this subsession or no units for this area
                     temporal_pvals_list.append(temporal_pvals)
                     
             n_units = np.shape(np.concatenate(temporal_pvals_list))[0]
+            print(np.shape(np.concatenate(temporal_pvals_list)))
             ax_title = f'Temporal Encoding, Spikes vs Behav\n{area}, {n_units} units, {stable_or_volatile}'
-            sup_title = 'Across Sessions'
-            fig = plot_temporal_encoding_spikes(np.concatenate(temporal_pvals_list),area,stable_or_volatile,ax_title,sup_title) #combine over sessions
+            suptitle = 'Across Sessions'
+            fig = plot_temporal_encoding_spikes(np.concatenate(temporal_pvals_list),area,stable_or_volatile,ax_title,suptitle) #combine over sessions
             utils.save_svg(fig,f'{area}_{stable_or_volatile}_sessavg',fig_folder,PROJ_FOLDER)
             
     return
@@ -2985,55 +3124,61 @@ def run_temporal_encodings_spikes():
 def run_temporal_encodings_LFP():
         
     fig_folder = 'LFPvsBehav'
-    stable_or_volatile = 'all_trials'
+    # stable_or_volatile = 'all_trials'
     
-    pvals_allsess = np.zeros((len(SESSIONS),len(AREAS),len(FREQ_BANDS),len(REGRESSORS),N_TIMEBINS))
-    betas_allsess = np.zeros((len(SESSIONS),len(AREAS),len(FREQ_BANDS),len(REGRESSORS),N_TIMEBINS))
+    for stable_or_volatile in SUBSESSIONS: 
         
-    for i,session in enumerate(SESSIONS):
-        Behav = ProcessBehavior(session)
-        #LFP = ProcessLFP(session)
-        #all_bandpowers = LFP.get_all_bandpowers() # dict of arrs(trials x freq_bands x timepoints)
-        if utils.does_pkl_exist('Bandpowers_dict',session,DATA_FOLDER):
-            all_bandpowers = utils.load_pkl('Bandpowers_dict',session,DATA_FOLDER) # dict of arrs(trials x freq_bands x timepoints)
-        else:
-            LFP = ProcessLFP(session)
-            all_bandpowers = LFP.get_all_bandpowers() # dict of arrs(trials x freq_bands x timepoints)
+        pvals_allsess = np.zeros((len(SESSIONS),len(AREAS),len(FREQ_BANDS),len(REGRESSORS),N_TIMEBINS))
+        betas_allsess = np.zeros((len(SESSIONS),len(AREAS),len(FREQ_BANDS),len(REGRESSORS),N_TIMEBINS))
+           
+        for i,session in enumerate(SESSIONS):
+            print(session)
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(i,session)
+            
+            # #LFP = ProcessLFP(session)
+            # #all_bandpowers = LFP.get_all_bandpowers() # dict of arrs(trials x freq_bands x timepoints)
+            # if utils.does_pkl_exist('Bandpowers_dict',session,DATA_FOLDER):
+            #     all_bandpowers = utils.load_pkl('Bandpowers_dict',session,DATA_FOLDER) # dict of arrs(trials x freq_bands x timepoints)
+            # else:
+            #     LFP = ProcessLFP(session)
+            #     all_bandpowers = LFP.get_all_bandpowers() # dict of arrs(trials x freq_bands x timepoints)
+            
+            for j,area in enumerate(AREAS):
+                for k,freq_band in enumerate(FREQ_BANDS):
+                    
+                    #if area recorded for this session and if there are trials for this subsession
+                    if (area in list(LFP.all_bandpowers.keys())) and (len(utils.get_trials(Behav.behavior_df, stable_or_volatile))>0):
+                    
+                        temporal_pvals, temporal_betas = \
+                            temporal_encoding_LFP_helper(LFP.all_bandpowers[area][:,k,:],
+                                                      Behav.behavior_df,stable_or_volatile)
+                        
+                        #Plot
+                        ax_title = f'Temporal Encoding, LFP vs Behavior\n{area},{freq_band} band\n{stable_or_volatile}'
+                        suptitle = session
+                        # fig = plot_temporal_encoding(temporal_pvals, temporal_betas, REGRESSORS, ax_title, suptitle)
+                        # utils.save_svg(fig,f'{area}_{freq_band}_{stable_or_volatile}_{session}',fig_folder,PROJ_FOLDER)
+                        
+                        #compile for across session comparison
+                        pvals_allsess[i,j,k,:,:] = temporal_pvals
+                        betas_allsess[i,j,k,:,:] = temporal_betas
+                        
+                    else: #if area NOT recorded for this session or no trials for this subsession
+                        pvals_allsess[i,j,k,:,:] = np.full_like(pvals_allsess[i,j,k,:,:],np.nan) #fill with nans
+                        betas_allsess[i,j,k,:,:] = np.full_like(betas_allsess[i,j,k,:,:],np.nan)
+        
+        
+        # Plot across session avg for each area and freq band
+        pval_avg = np.nanmean(pvals_allsess,axis=0)
+        beta_avg = np.nanmean(betas_allsess,axis=0)
         
         for j,area in enumerate(AREAS):
             for k,freq_band in enumerate(FREQ_BANDS):
                 
-                if area in list(all_bandpowers.keys()): #if area recorded for this session
-                
-                    temporal_pvals, temporal_betas = \
-                        temporal_encoding_LFP_helper(all_bandpowers[area][:,k,:],
-                                                  Behav.behavior_df,stable_or_volatile)
-                    
-                    ax_title = f'Temporal Encoding, LFP vs Behavior\n{area},{freq_band} band'
-                    sup_title = session
-                    fig = plot_temporal_encoding(temporal_pvals, temporal_betas, REGRESSORS, ax_title, sup_title)
-                    utils.save_svg(fig,f'{area}_{freq_band}_{stable_or_volatile}_{session}',fig_folder,PROJ_FOLDER)
-                    
-                    #compile for across session comparison
-                    pvals_allsess[i,j,k,:,:] = temporal_pvals
-                    betas_allsess[i,j,k,:,:] = temporal_betas
-                    
-                else: #if area NOT recorded for this session
-                    pvals_allsess[i,j,k,:,:] = np.full_like(pvals_allsess[i,j,k,:,:],np.nan) #fill with nans
-                    betas_allsess[i,j,k,:,:] = np.full_like(betas_allsess[i,j,k,:,:],np.nan)
-    
-    
-    # Plot across session avg for each area and freq band
-    pval_avg = np.nanmean(pvals_allsess,axis=0)
-    beta_avg = np.nanmean(betas_allsess,axis=0)
-    
-    for j,area in enumerate(AREAS):
-        for k,freq_band in enumerate(FREQ_BANDS):
-            
-            ax_title = f'Temporal Encoding, LFP vs Behavior\n{area},{freq_band} band'
-            sup_title = 'Session Average'
-            fig = plot_temporal_encoding(pval_avg[j,k,:,:], beta_avg[j,k,:,:], REGRESSORS, ax_title, sup_title)
-            utils.save_svg(fig,f'{area}_{freq_band}_{stable_or_volatile}_sessavg',fig_folder,PROJ_FOLDER)
+                ax_title = f'Temporal Encoding, LFP vs Behavior\n{area},{freq_band} band\n{stable_or_volatile}'
+                suptitle = 'Session Average'
+                fig = plot_temporal_encoding(pval_avg[j,k,:,:], beta_avg[j,k,:,:], REGRESSORS, ax_title, suptitle)
+                utils.save_svg(fig,f'{area}_{freq_band}_{stable_or_volatile}_sessavg',fig_folder,PROJ_FOLDER)
             
     return
 
@@ -3045,8 +3190,6 @@ def run_temporal_encodings_LFP_vs_PCA():
     
     for s,session in enumerate(SESSIONS):
         Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-        # LFP = ProcessLFP(session)
-        all_bandpowers = LFP.get_all_bandpowers() # dict of (trials x freq_bands x timepoints)
         
         for i,spike_area in enumerate(AREAS): # PCA area
             
@@ -3055,102 +3198,83 @@ def run_temporal_encodings_LFP_vs_PCA():
             if PCA.n_units > 1:
                 PCA_data = PCA.get_timebin_data_transformed() #components x trials x timebins
                 
-                for j,lfp_area in enumerate(AREAS):
-                    
-                    if lfp_area in LFP.session_areas: #if area recorded for this session
-                        lfp_matrix = all_bandpowers[lfp_area] # trials x freqbands x timebins
+                for stable_or_volatile in SUBSESSIONS:
+                
+                    for j,lfp_area in enumerate(AREAS):
                         
-                        for comp in range(PCA.n_comp): #do for all dominant components
-                            temporal_pvals, temporal_betas = \
-                                temporal_encodings_LFP_vs_PCA_helper(PCA_data[comp,:,:],lfp_matrix,Behav.behavior_df,stable_or_volatile)
+                        if lfp_area in LFP.session_areas: #if area recorded for this session
+                            lfp_matrix = LFP.all_bandpowers[lfp_area] # trials x freqbands x timebins
                             
-                            ax_title = f'Temporal Encoding, PCA ({spike_area}) vs LFP ({lfp_area})\nPC #{comp+1}'
-                            sup_title = session
-                            fig = plot_temporal_encoding(temporal_pvals,temporal_betas,list(FREQ_BANDS.keys()),ax_title,sup_title)
-                            utils.save_svg(fig,f'LFP_{lfp_area}_vs_PCA_{spike_area}_PC{comp+1}_{stable_or_volatile}_{session}',fig_folder,PROJ_FOLDER)
-        
+                            if len(utils.get_trials(Behav.behavior_df, stable_or_volatile)) > 0:
+                            
+                                for comp in range(PCA.n_comp): #do for all dominant components
+                                    temporal_pvals, temporal_betas = \
+                                        temporal_encodings_LFP_vs_PCA_helper(PCA_data[comp,:,:],lfp_matrix,Behav.behavior_df,stable_or_volatile)
+                                    
+                                    ax_title = f'Temporal Encoding, PCA ({spike_area}) vs LFP ({lfp_area})\nPC #{comp+1}\n{stable_or_volatile}'
+                                    suptitle = session
+                                    fig = plot_temporal_encoding(temporal_pvals,temporal_betas,list(FREQ_BANDS.keys()),ax_title,suptitle)
+                                    utils.save_svg(fig,f'LFP_{lfp_area}_vs_PCA_{spike_area}_PC{comp+1}_{stable_or_volatile}_{session}',fig_folder,PROJ_FOLDER)
+            
             
     return
-
-
-
-
-#### Works in Progress #######################################################
-def get_LFP_bandpowers(): #to compute and save out bandpwoers so i don't have to rerun later
-    for s,session in enumerate(SESSIONS):
-        LFP = ProcessLFP(session)
-        all_bandpowers = LFP.get_all_bandpowers(overwrite_flag=True) # (areas x trials x freq_bands x timepoints)
-    return
-
-
-def run_lasso():
-    
-    # REGRESSORS = ['Q1','Choice1','Qhigh','Qchosen','Qdiff_','absQdiff','Choice_high','Side','Time']
-    
-    encodings_dict= {} #over all sessions
-    
-    for s,session in enumerate([SESSIONS[0]]):
-        
-        Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-        units = list(Spikes.firing_rate_df.columns)
-        behavior = Behav.behavior_df[REGRESSORS]
-
-        
-        for j,unit in enumerate(units):
-            fr = Spikes.firing_rate_df[unit]
-                     
-            # print(behavior.shape)
-            # print(fr.shape)
-            score,coefs = utils.lasso_regression(fr,behavior,verbose = False)
-            encoding = utils.lasso_feature_selection(coefs,REGRESSORS)
-            encodings_dict[unit] = encoding
-            
-    neuron_type_df = pd.DataFrame.from_dict(encodings_dict, orient='index', columns=['Encodings'])
-    utils.save_csv(neuron_type_df,'lasso_encodings','',DATA_FOLDER)
-
-    
-    return neuron_type_df
 
 
 def regression_rsqr_table():
     
     df_dict = dict()
     
+    all_regs = [
+                  'Q1',
+                  'Choice1',
+                  'Qhigh',
+                  'Qchosen',
+                  'Qdiff_',
+                  'absQdiff',
+                  'Choice_high',
+                  'Side',
+                  'Time'
+                  ]
+    
     for s,session in enumerate(SESSIONS):
         
         Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-        units = list(Spikes.firing_rate_df.columns)
+        units = list(Spikes.fr_df.columns)
         behavior_df = Behav.behavior_df
-
+        start = time.time()
         
         for j,unit in enumerate(units):
-            fr = Spikes.firing_rate_df[unit]
+            fr = Spikes.fr_df[unit]
                      
             # lasso (regularization feature selection)
-            score,coefs = utils.lasso_regression(fr,behavior_df[REGRESSORS],verbose=False)
+            score,coefs = utils.regularization_regression(fr,behavior_df[all_regs],'lasso',0.001,1e-4,verbose=False)
             lasso_res = score
             
+            # ridge (regularization feature selection)
+            score,coefs = utils.regularization_regression(fr,behavior_df[all_regs],'ridge',0.01,1e-4,verbose=False)
+            ridge_res = score
+            
             # full regressions
-            f_pval,pvals,rsqr = utils.linear_encoding_regression(fr,behavior_df[['Q1','Qchosen','Choice1','Side','Time']])
-            Q1Qch_res = rsqr
+            res = utils.linear_encoding_regression(fr,behavior_df[REGRESSORS])
+            Q1Qch_res = res.rsquared
             
-            f_pval,pvals,rsqr = utils.linear_encoding_regression(fr,behavior_df[['Q1','absQdiff','Choice1','Side','Time']])
-            Q1absQdiff_res = rsqr
+            res = utils.linear_encoding_regression(fr,behavior_df[['Q1','absQdiff','Choice1','Side','Time']])
+            Q1absQdiff_res = res.rsquared
             
-            f_pval,pvals,rsqr = utils.linear_encoding_regression(fr,behavior_df[['Q1','Qhigh','Choice1','Side','Time']])
-            Q1Qhigh_res = rsqr
+            res = utils.linear_encoding_regression(fr,behavior_df[['Q1','Qhigh','Choice1','Side','Time']])
+            Q1Qhigh_res = res.rsquared
             
-            f_pval,pvals,rsqr = utils.linear_encoding_regression(fr,behavior_df[['Qdiff_','Qchosen','Choice1','Side','Time']])
-            QdiffQch_res = rsqr
+            res = utils.linear_encoding_regression(fr,behavior_df[['Qdiff_','Qchosen','Choice1','Side','Time']])
+            QdiffQch_res = res.rsquared
             
             # simple regressions
-            simple_reg_res = utils.simple_regression_best_rsqr(REGRESSORS,fr,behavior_df)
+            simple_reg_res = utils.simple_regression_best_rsqr(all_regs,fr,behavior_df)
                 
                 
-            
-            df_dict[unit] = [lasso_res, Q1Qch_res, Q1absQdiff_res, Q1Qhigh_res, QdiffQch_res, simple_reg_res]
-
-    col_names = ['Lasso', 'Q1 Qchosen', 'Q1 |Qdiff|', 'Q1 Qhigh', 'Qdiff Qchosen', 'Simple']
+            # Compile results into a dict which will become a row in the final df
+            df_dict[unit] = [lasso_res, ridge_res, Q1Qch_res, Q1absQdiff_res, Q1Qhigh_res, QdiffQch_res, simple_reg_res]
+        utils.get_time_left(start,s,len(SESSIONS))
+    col_names = ['Lasso', 'Ridge', 'Q1 Qchosen', 'Q1 |Qdiff|', 'Q1 Qhigh', 'Qdiff Qchosen', 'Simple']
     df = pd.DataFrame.from_dict(df_dict, orient='index', columns=col_names)
     utils.save_csv(df,'RegressionRSqrTable','',DATA_FOLDER)
     
@@ -3158,7 +3282,7 @@ def regression_rsqr_table():
     ax.bar(col_names,df.mean(axis=0))
     data = [df[col_names[i]] for i in range(len(col_names))]
     ax.plot(range(len(col_names)),data,'o',alpha=0.1)
-    ax.set_ylabel('R-Squared')
+    ax.set_ylabel('Avg R-Squared')
     for tick in ax.xaxis.get_major_ticks()[1::2]:
         tick.set_pad(15) #
     
@@ -3219,6 +3343,94 @@ def run_value_model_comparison():
 
     return
 
+
+def lasso_param_gridsearch(lasso_or_ridge='lasso'):
+    
+    # tols = [1e-4,1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-11,1e-12]
+    # reg_strengths = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0]
+    tols = [1e-4]
+    # reg_strengths = [1e-7,5e-7,1e-6,5e-6,1e-5,5e-5,1e-4,5e-4]
+    reg_strengths = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e-0]
+    ntols = len(tols)
+    nregs = len(reg_strengths)
+    nsess = len(SESSIONS)
+    
+    master_regressor_list = ['Q1','Choice1','Qhigh','Qchosen','Qdiff_','absQdiff','Choice_high','Side','Time']
+    
+    result_matrix = np.zeros((ntols,nregs))
+
+    for s,session in enumerate(SESSIONS):
+        Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+        units = list(Spikes.fr_df.columns)
+        behavior_df = Behav.behavior_df
+        
+        start = time.time()
+        
+        for i,tol in enumerate(tols):
+            for j,reg_strength in enumerate(reg_strengths):
+                
+                scores=[]
+                for unit in units:
+                    fr = Spikes.fr_df[unit]
+                    score,coefs = utils.regularization_regression(fr,behavior_df[master_regressor_list],lasso_or_ridge,reg_strength,tol,verbose=False)
+                    scores.append(score)
+                result_matrix[i,j] += np.mean(score)
+                
+        utils.get_time_left(start,s,nsess)               
+        
+    result_matrix = result_matrix / nsess 
+    utils.save_pkl(result_matrix,f'lasso_gridsearch3_{lasso_or_ridge}','',DATA_FOLDER)
+    
+    fig,ax=plt.subplots()
+    im=ax.matshow(result_matrix)
+    ax.set_xlabel('Regularization Strength')
+    ax.set_ylabel('Tolerance')
+    ax.set_xticks(range(nregs),reg_strengths)
+    ax.set_yticks(range(ntols),tols)
+    ax.set_title('Lasso hyperparameter grid search')
+    c=fig.colorbar(im)
+    c.ax.set_ylabel('R^2')
+    
+    return
+
+
+#### Works in Progress #######################################################
+# def get_LFP_bandpowers(): #to compute and save out bandpwoers so i don't have to rerun later
+#     for s,session in enumerate(SESSIONS):
+#         LFP = ProcessLFP(session)
+#         all_bandpowers = LFP.get_all_bandpowers(overwrite_flag=True) # (areas x trials x freq_bands x timepoints)
+#     return
+
+
+def run_lasso():
+    
+    # REGRESSORS = ['Q1','Choice1','Qhigh','Qchosen','Qdiff_','absQdiff','Choice_high','Side','Time']
+    
+    encodings_dict= {} #over all sessions
+    
+    for s,session in enumerate([SESSIONS[0]]):
+        
+        Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+        units = list(Spikes.fr_df.columns)
+        behavior = Behav.behavior_df[REGRESSORS]
+
+        
+        for j,unit in enumerate(units):
+            fr = Spikes.fr_df[unit]
+                     
+            # print(behavior.shape)
+            # print(fr.shape)
+            score,coefs = utils.lasso_regression(fr,behavior,verbose = False)
+            encoding = utils.lasso_feature_selection(coefs,REGRESSORS)
+            encodings_dict[unit] = encoding
+            
+    neuron_type_df = pd.DataFrame.from_dict(encodings_dict, orient='index', columns=['Encodings'])
+    utils.save_csv(neuron_type_df,'lasso_encodings','',DATA_FOLDER)
+
+    
+    return neuron_type_df
+
+
 def plot_behavior():
     df_list =[]
     corr_list=[]
@@ -3265,52 +3477,6 @@ def plot_behavior():
     return
 
 
-def lasso_gridsearch():
-    
-    # tols = [1e-4,1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-11,1e-12]
-    # reg_strengths = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0]
-    tols = [1e-4,1e-5,1e-6]
-    reg_strengths = [1e-7,5e-7,1e-6,5e-6,1e-5,5e-5,1e-4,5e-4]
-    ntols = len(tols)
-    nregs = len(reg_strengths)
-    nsess = len(SESSIONS)
-    
-    master_regressor_list = ['Q1','Choice1','Qhigh','Qchosen','Qdiff_','absQdiff','Choice_high','Side','Time']
-    
-    result_matrix = np.zeros((ntols,nregs))
-
-    for s,session in enumerate(SESSIONS):
-        Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-        units = list(Spikes.firing_rate_df.columns)
-        behavior_df = Behav.behavior_df
-        
-        print(f'{s+1}/{nsess}')
-        
-        for i,tol in enumerate(tols):
-            for j,reg_strength in enumerate(reg_strengths):
-                
-                scores=[]
-                for unit in units:
-                    fr = Spikes.firing_rate_df[unit]
-                    score,coefs = utils.lasso_regression(fr,behavior_df[master_regressor_list],reg_strength,tol,verbose=False)
-                    scores.append(score)
-                result_matrix[i,j] += np.mean(score)
-                
-    result_matrix = result_matrix / nsess 
-    utils.save_pkl(result_matrix,'lasso_gridsearch2','',DATA_FOLDER)
-    
-    fig,ax=plt.subplots()
-    im=ax.matshow(result_matrix)
-    ax.set_xlabel('Regularization Strength')
-    ax.set_ylabel('Tolerance')
-    ax.set_xticks(range(nregs),reg_strengths)
-    ax.set_yticks(range(ntols),tols)
-    ax.set_title('Lasso hyperparameter grid search')
-    c=fig.colorbar(im)
-    c.ax.set_ylabel('R^2')
-    
-    return
-
 
 
 
@@ -3352,16 +3518,27 @@ def lasso_gridsearch():
 
 
 
-def load_data():
+#%% Load Data
+# load_ = input('Load Spikes and Behavioral Data? [y/n] ')
+# match load_:
+#     case 'y':
+#         Spikes_list, Behav_list = load_Spikes_Behav()
+#     case _:
+#         print('Data not loaded.')
+#         Spikes_list, Behav_list = None, None
+
+def load_data(overwrite_flag=False):
     
     
     sp_list=[]
     be_list=[]
     lfp_list=[]
-    for session in SESSIONS:
+    for s,session in enumerate(SESSIONS):
+        
+        start = time.time()
         
         ## Spikes
-        if utils.does_pkl_exist('Spikes', session,DATA_FOLDER):  
+        if utils.does_pkl_exist('Spikes', session,DATA_FOLDER) and not overwrite_flag:  
             Spikes = utils.load_pkl('Spikes', session,DATA_FOLDER)
             
             #Check that params are the same 
@@ -3383,25 +3560,27 @@ def load_data():
         be_list.append(Behav)
         
         
-        # ## LFP
-        # if utils.does_pkl_exist('LFP', session,DATA_FOLDER):  
-        #     LFP = utils.load_pkl('LFP', session,DATA_FOLDER)
-        #     lfp_list.append(LFP)
+        ## LFP
+        if utils.does_pkl_exist('LFP', session,DATA_FOLDER) and not overwrite_flag:  
+            LFP = utils.load_pkl('LFP', session,DATA_FOLDER)
             
-        #     #Check that params are the same 
-        #     if (LFP.alignment == ALIGNMENT) and np.all(LFP.t_vector == T_VECTOR):
-        #         sp_list.append(LFP)
-        #     else: #if params are new, overwrite
-        #         del LFP
-        #         LFP = ProcessLFP(session, verbose=False)
-        #         utils.save_pkl(LFP, 'LFP', session,DATA_FOLDER)
-        #         lfp_list.append(LFP)
+            #Check that params are the same 
+            if (LFP.alignment == ALIGNMENT) and np.all(LFP.t_vector == T_VECTOR):
+                lfp_list.append(LFP)
+            else: #if params are new, overwrite
+                del LFP
+                LFP = ProcessLFP(session, verbose=False)
+                utils.save_pkl(LFP, 'LFP', session,DATA_FOLDER)
+                lfp_list.append(LFP)
                 
-        # else: #if pkl doesnt exist
-        #     LFP = ProcessLFP(session, verbose=False)
-        #     utils.save_pkl(LFP, 'LFP', session,DATA_FOLDER)
-        #     lfp_list.append(LFP)
+        else: #if pkl doesnt exist
+            LFP = ProcessLFP(session, verbose=False)
+            utils.save_pkl(LFP, 'LFP', session,DATA_FOLDER)
+            lfp_list.append(LFP)
+        # lfp_list.append('')
         
+        utils.get_time_left(start,s,len(SESSIONS))
+    assert len(sp_list) == len(be_list) == len(lfp_list) == len(SESSIONS)    
     return sp_list,be_list,lfp_list
 
 
@@ -3409,37 +3588,33 @@ def load_data():
 def get_Spikes_Behav_LFP(s: int, session: str):
     # s is idx counter representing the number session to load
     # session is the str name of the session to load
-    if Spikes_list:
-        Spikes = Spikes_list[s]
-        Behav = Behav_list[s]
-        LFP = LFP_list[s]
+    if SPIKES_LIST:
+        Spikes = SPIKES_LIST[s]
+        Behav = BEHAV_LIST[s]
+        LFP = LFP_LIST[s]
     else:
         Spikes = ProcessSpikes(session,verbose=False)
         Behav = ProcessBehavior(session)
         LFP = ProcessLFP(session, verbose=False)
     return Spikes, Behav, LFP
 
-#%% Load Data
-# load_ = input('Load Spikes and Behavioral Data? [y/n] ')
-# match load_:
-#     case 'y':
-#         Spikes_list, Behav_list = load_Spikes_Behav()
-#     case _:
-#         print('Data not loaded.')
-#         Spikes_list, Behav_list = None, None
 
-
-# Spikes_list,Behav_list,LFP_list = load_data()
+SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_flag=False)
+# run_learning_rate(overwrite_flag=True)
 
 # utils.does_pkl_exist('testdict11', '',DATA_FOLDER)
 # utils.save_pkl({'a':123},'testdict11','',DATA_FOLDER)   
    
-for i,session in enumerate(SESSIONS):
+
+
+
+
+# for i,session in enumerate(SESSIONS):
      
-    if i!=0:
+#     if i!=0:
         
-        LFP = ProcessLFP(session, verbose=False)
-        utils.save_pkl(LFP, 'LFP_new', session,DATA_FOLDER)
+#         LFP = ProcessLFP(session, verbose=False)
+#         utils.save_pkl(LFP, 'LFP_new', session,DATA_FOLDER)
 
 
 

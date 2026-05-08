@@ -13,6 +13,7 @@ import os
 # import sys
 # import gif
 # import copy
+import time
 import pickle
 import sklearn
 # import neurodsp
@@ -27,9 +28,26 @@ from matplotlib import pyplot as plt
 # from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 #### Utility Funcs
+def get_time_left(start_time,itr,n_itrs):
+    end_time = time.time()
+    time_taken = end_time - start_time 
+    iters_left = n_itrs - itr - 1
+    time_left = np.round(time_taken * iters_left / 60,decimals=1)
+    print(f'--------------{itr+1}/{n_itrs} - {time_left} mins left--------------')
+    return
+
+def flatten(xs):
+    result = []
+    if isinstance(xs, (list, tuple)):
+        for x in xs:
+            result.extend(flatten(x))
+    else:
+        result.append(xs)
+    return result
+
 def get_avg_sem(arr,axis):
-    avg = np.mean(arr,axis=axis)
-    sem = np.std(arr,axis=axis) / np.sqrt(np.shape(arr)[axis])
+    avg = np.nanmean(arr,axis=axis)
+    sem = np.nanstd(arr,axis=axis) / np.sqrt(np.shape(arr)[axis])
     return avg,sem
 
 def linear_encoding_regression(spikes,behavior):
@@ -68,10 +86,12 @@ def linear_encoding_regression_feature_selection(regressor_list,spikes,behavior_
     
     pvals = res.pvalues[1:] #exclude constant (position 0)
     
-    if res.f_pval < alpha_thresh:
-        signif_regressors = [str(feat) for feat in np.array(regressor_list)[pvals < alpha_thresh]]
+    if res.f_pvalue < alpha_thresh:
+        signif_regressors = str([str(feat) for feat in np.array(regressor_list)[pvals < alpha_thresh]])
+        if len(signif_regressors) < 1:
+            signif_regressors = 'none'
     else:
-        signif_regressors = ['']
+        signif_regressors = 'none'
         
     return signif_regressors
         
@@ -102,9 +122,9 @@ def regularization_regression(spikes,behavior, lasso_or_ridge='lasso', regulariz
         model = sklearn.linear_model.Ridge(alpha=regularization_strength,tol=tol)
     model.fit(behavior, spikes) #no need to add constant since intercept is automatically fit by this method
     score = model.score(behavior, spikes) #r squared
-    a=model.get_params()
-    print(a.keys())
-    xxx
+    # a=model.get_params()
+    # print(a.keys())
+    # xxx
     
     if verbose:
         print('{lasso_or_ridge} model fit!\n')
@@ -122,10 +142,19 @@ def regularization_regression(spikes,behavior, lasso_or_ridge='lasso', regulariz
         print('\n\n')
     return score, model.coef_
 
-def regularization_regression_feature_selection(coefs,regressor_list):
-    thresh = 1E-5
-    feats = coefs > thresh #bool arr i think
-    return str([str(feat) for feat in np.array(regressor_list)[feats]])
+def regularization_regression_feature_selection(regressor_list,spikes,behavior_df,lasso_or_ridge,regularization_strength,tol):
+    
+    score, coefs = regularization_regression(spikes,behavior_df[regressor_list],lasso_or_ridge,regularization_strength,tol,verbose=False)
+
+    thresh = 1
+    feats = abs(coefs) > thresh #bool arr i think
+    
+    if sum(feats) > 0:
+        signif_regressors = str([str(feat) for feat in np.array(regressor_list)[feats]])
+    else:
+        signif_regressors = 'none'
+        
+    return signif_regressors, coefs
 
 def simple_regression_feature_selection(regressor_list,spikes,behavior_df,alpha_thresh):
     encoding_list = []
@@ -158,8 +187,8 @@ def simple_regression_best_rsqr(regressor_list,spikes,behavior_df):
     rsqr_list = []
     for reg in regressor_list:
         reg_behav = behavior_df[reg]
-        f_pval, pval, rsqr = linear_encoding_regression(spikes,reg_behav)
-        rsqr_list.append(rsqr)
+        res = linear_encoding_regression(spikes,reg_behav)
+        rsqr_list.append(res.rsquared)
         
     return max(rsqr_list)
     
@@ -169,11 +198,11 @@ def area_parser(df_or_dict,brain_area):
         
         match brain_area:
             case 'vmPFC':
-                subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit A' not in k}
+                subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit A' in k}
             case 'Cd':
-                subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit C' not in k}
+                subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit C' in k}
             case 'OFC':
-                subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit D' not in k}
+                subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit D' in k}
             case 'all areas':
                 subset_df_or_dict = df_or_dict
             case _:
@@ -191,6 +220,19 @@ def area_parser(df_or_dict,brain_area):
                     subset_df_or_dict = df_or_dict[df_or_dict['Unit_labels'].str.contains('Unit C')]
                 case 'OFC':
                     subset_df_or_dict = df_or_dict[df_or_dict['Unit_labels'].str.contains('Unit D')]
+                case 'all areas':
+                    subset_df_or_dict = df_or_dict
+                case _:
+                    raise ValueError('Invalid brain area')
+                    
+        elif 'Unit' in df_or_dict.columns: #unit=row organization
+            match brain_area:
+                case 'vmPFC':
+                    subset_df_or_dict = df_or_dict[df_or_dict['Unit'].str.contains('Unit A')]
+                case 'Cd':
+                    subset_df_or_dict = df_or_dict[df_or_dict['Unit'].str.contains('Unit C')]
+                case 'OFC':
+                    subset_df_or_dict = df_or_dict[df_or_dict['Unit'].str.contains('Unit D')]
                 case 'all areas':
                     subset_df_or_dict = df_or_dict
                 case _:
@@ -220,10 +262,27 @@ def get_trials(behav_df,stable_or_volatile):
             trials = all_trials[behav_df['Stable']==1]
         case 'volatile block':
             trials = all_trials[behav_df['Volatile']==1]
-        case _:
+        case 'all trials':
             trials = all_trials
+        case _:
+            raise ValueError('Invalid subsession')
             
     return trials
+
+def get_unique_units(unit_list,SUBSESSIONS):
+    for subsession in SUBSESSIONS:
+        unit_list = [unit.removesuffix(f' - {subsession}') for unit in unit_list]
+        
+    return np.unique(np.array(unit_list))
+
+def get_unit_data(df,unit,heading):
+    desired_row = df[df['Unit']==unit]
+    if len(desired_row)>0:
+        desired_value = desired_row[heading].values[0]
+    else:
+        desired_value = ''
+
+    return desired_value
 
 def calc_percent_encoding(pval_df,alpha_threshold):
     pval_df = pval_df.drop('Unit_labels',axis=1)
@@ -283,6 +342,12 @@ def load_pkl(obj_name,session,data_folder):
     with open(os.path.join(data_folder,session,f'{session}_{obj_name}.pkl'),'rb') as f:
         obj = pickle.load(f)
     print(f'{session}_{obj_name}.pkl loaded.')
+    return obj
+
+def load_pkl_2(obj_name,session,data_folder):
+    with open(os.path.join(data_folder,session,f'{obj_name}_{session}.pkl'),'rb') as f:
+        obj = pickle.load(f)
+    print(f'{obj_name}_{session}.pkl loaded.')
     return obj
 
 def does_pkl_exist(obj_name,session,data_folder):

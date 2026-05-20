@@ -34,9 +34,32 @@ def get_block_info(session):
         return
     
     match session:
-
+        case 'airp20250602_03_te2003':
+            stable_1st()
+        case 'airp20250604_08_te2011':
+            volatile_1st()
+        case 'airp20250617_03_te2031':
+            stable_1st()
+        case 'airp20250618_03_te2034':
+            volatile_1st()
+        case 'airp20250626_03_te2049':
+            stable_1st()
+        case 'airp20250701_06_te2058':
+            stable_1st()
+        case 'airp20250826_05_te2135':
+            stable_1st()
+        case 'airp20250904_03_te2147':
+            volatile_1st()
+        case 'airp20250910_02_te2156':
+            volatile_1st()
+        case 'airp20250912_02_te2160':
+            stable_1st()
         case 'airp20250919_02_te2177':
-            volatile_1st()        
+            volatile_1st()    
+        case 'airp20251007_02_te2198':
+            stable_1st()
+        case 'airp20251008_02_te2200':
+            volatile_1st()    
         case 'airp20251015_04_te2206':
             stable_1st()
         case 'airp20251016_03_te2209':
@@ -57,6 +80,33 @@ def get_block_info(session):
             stable_1st()
         case 'airp20251111_02_te2250':
             volatile_1st()
+        case 'airp20260224_03_te2287':
+            stable_1st()
+        case 'airp20260302_03_te2302':
+            volatile_1st()
+        case 'airp20260303_02_te2304':
+            stable_1st()
+        case 'airp20260305_12_te2321':
+            stable_1st()
+        case 'airp20260310_03_te2324':
+            volatile_1st()
+        case 'airp20260311_03_te2327':
+            stable_1st()
+        case 'airp20260403_03_te2337':
+            volatile_1st()
+        case 'airp20260406_03_te2340':
+            stable_1st()
+        case 'airp20260408_03_te2343':
+            volatile_1st()
+        case 'airp20260409_03_te2346':
+            stable_1st()
+        case 'airp20260414_03_te2352':
+            stable_1st()
+        case 'airp20260415_03_te2355':
+            volatile_1st()
+            
+            
+            
         case 'braz20240927_01_te5384':
             stable_1st()
         case _:

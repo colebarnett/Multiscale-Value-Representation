@@ -195,7 +195,7 @@ def simple_regression_best_rsqr(regressor_list,spikes,behavior_df):
 def area_parser(df_or_dict,brain_area):
     
     if type(df_or_dict) == dict:
-        
+                    
         match brain_area:
             case 'vmPFC':
                 subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit A' in k}
@@ -208,8 +208,7 @@ def area_parser(df_or_dict,brain_area):
             case _:
                 raise ValueError('Invalid brain area')
         
-        
-        
+                
     if type(df_or_dict)==pd.DataFrame:
         
         if 'Unit_labels' in df_or_dict.columns: #unit=row organization
@@ -253,6 +252,24 @@ def area_parser(df_or_dict,brain_area):
       
     return subset_df_or_dict
 
+def count_units_area(dict_,brain_area):
+    
+    assert 'unit_labels' in dict_.keys()
+    
+    match brain_area:
+        case 'vmPFC':
+            n_units = sum(['Unit A' in label for label in dict_['unit_labels']])
+        case 'Cd':
+            n_units = sum(['Unit C' in label for label in dict_['unit_labels']])
+        case 'OFC':
+            n_units = sum(['Unit D' in label for label in dict_['unit_labels']])
+        case 'all areas':
+            n_units = sum(['Unit' in label for label in dict_['unit_labels']])
+        case _:
+            raise ValueError('Invalid brain area')
+    
+    return n_units
+
 def get_trials(behav_df,stable_or_volatile):
     
     all_trials = np.arange(len(behav_df))
@@ -280,7 +297,8 @@ def get_unit_data(df,unit,heading):
     if len(desired_row)>0:
         desired_value = desired_row[heading].values[0]
     else:
-        desired_value = ''
+        # desired_value = ''
+        desired_value = np.nan
 
     return desired_value
 

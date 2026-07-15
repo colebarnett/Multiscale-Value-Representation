@@ -4,39 +4,39 @@ Created on Tue Aug 30 14:13:21 2022
 
 @author: yz25424
 """
-
+import sys
 from os import path as ospath
-# import sys
 import numpy as np
 import scipy as sp
-# from scipy import io
+from scipy import io
 import matplotlib.pyplot as plt
-# import tables
+import tables
 import os
-import time
 import warnings
+import time
 #import neurodsp
 
-# BMI_FOLDER = r"C:\Users\crb4972\Desktop\bmi_python"
-BMI_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\bmi_python"
+BMI_FOLDER = r"C:\Users\crb4972\bmi_python" # on Yi's desktop
 NS_FOLDER = ospath.join(BMI_FOLDER,'riglib','ripple','pyns','pyns')
-os.chdir(BMI_FOLDER)
 
-
-
-# os.chdir(r"D:\dropbox\Dropbox\Samantha lab\BMI_Airport") # on windows
+#os.chdir(r"C:\Users\crb4972\bmi_python") # on Yi's desktop
+#os.chdir(r"D:\dropbox\Dropbox\Samantha lab\BMI_Airport") # on windows
 #os.chdir(r"/Users/zhaoyi/Dropbox/Samantha lab/BMI_Airport") # on mac
+
+sys.path.insert(1,BMI_FOLDER)
+sys.path.insert(21,NS_FOLDER)
+
 from riglib.ripple.pyns.pyns.nsexceptions import NeuroshareError, NSReturnTypes
 import riglib.ripple.pyns.pyns.nsparser
 from riglib.ripple.pyns.pyns.nsparser import ParserFactory
 from riglib.ripple.pyns.pyns.nsentity import AnalogEntity, SegmentEntity, EntityType, EventEntity, NeuralEntity
 from riglib.blackrock.brpylib import NsxFile
-# os.chdir(r"D:\dropbox\Dropbox\Samantha lab\BMI_Airport\riglib\ripple\pyns\pyns) # on windows
-#os.chdir(r"/Users/zhaoyi/Dropbox/Samantha lab/BMI_Airport/riglib/ripple/pyns/pyns") # on windows
 
-os.chdir(NS_FOLDER)
+#os.chdir(r"C:\Users\crb4972\bmi_python\riglib\ripple\pyns\pyns") # on on Yi's desktop
+#os.chdir(r"D:\dropbox\Dropbox\Samantha lab\BMI_Airport\riglib\ripple\pyns\pyns") # on windows
+#os.chdir(r"/Users/zhaoyi/Dropbox/Samantha lab/BMI_Airport/riglib/ripple/pyns/pyns") # on windows
 from nsfile import NSFile
-warnings.filterwarnings('ignore')
+#warnings.filterwarnings('ignore')
 
 #%%
 class nsyncHDF:
@@ -48,6 +48,7 @@ class nsyncHDF:
         Parameters:
         filename -- relative path to wanted .ns5 file
         """
+        print(filename)
         self.name = ospath.basename(filename)[:-4]
         self.path = ospath.dirname(filename)
 
@@ -61,7 +62,9 @@ class nsyncHDF:
 
         if filename[-4:]=='.ns5':
             self.nsfile = NsxFile(filename)
-            self.output = self.nsfile.getdata() 
+            start = time.time()
+            self.output = self.nsfile.getdata()
+            print('data loaded. Time taken: {(time.time()-start)/60} mins')
         else:
             raise Exception('Error: Not an .ns5 file')
 
@@ -91,74 +94,40 @@ class nsyncHDF:
         rownum = np.flip((rownum > 2500).astype(int), axis = 0)
 
         # Convert the binary digits into arrays
-        print('Converting binary digits into arrays..')
         MSGTYPE = np.zeros(msgtype.shape[1])
         ROWNUMB = np.zeros(rownum.shape[1])
-        start_time = time.time()
+        start=time.time()
         for tp in range(MSGTYPE.shape[0]):
             MSGTYPE[tp] = int(''.join(str(i) for i in msgtype[:,tp]), 2)
             ROWNUMB[tp] = int(''.join(str(i) for i in rownum[:,tp]), 2)
-			
-            if tp == 10000 or (tp%1000000==0 and tp!=0):
-                time_taken=time.time() - start_time
-                time_left= np.round(time_taken / tp * (MSGTYPE.shape[0] - tp) / 60)
-                print(f'Approx time remaining: {time_left} mins')
+
+            if tp == 100:
+                time_per = (time.time() - start) / 100
+                time_left = (MSGTYPE.shape[0] - 100) * time_per / 60 #mins
+                print(f'Approx {time_left} mins remaining for binary conversion.')
+                
 
         find_recording_start = np.ravel(np.nonzero(strobe))[0]
         find_data_rows = np.logical_and(np.ravel(np.equal(MSGTYPE,13)),np.ravel(np.greater(strobe,0)))  
-        find_data_rows_ind = np.ravel(np.nonzero(find_data_rows))        
+        find_data_rows_ind = np.ravel(np.nonzero(find_data_rows))
 
         rows = ROWNUMB[find_data_rows_ind]    # row numbers (mod 256)
-        
-        
-        
-        # ## Sanity check plot
-        # starttime=18
-        # endtime = starttime+8
-
-        # fig,axs=plt.subplots(3,1)
-        # axs[0].set_title('strobe - Indicates when behavior is sending message')
-        # axs[0].plot(strobe,'.')
-        # axs[0].plot(find_data_rows_ind,np.ones(len(find_data_rows_ind)),'.') #1 is to signal that a message is being sent
-        # axs[0].set_xticks([])
-        # axs[1].set_title('MSGTYPE - Indicates message type')
-        # axs[1].plot(MSGTYPE,'.')
-        # axs[1].plot(find_data_rows_ind,13*np.ones(len(find_data_rows_ind)),'.') #13 is the code for when the message is a row number 
-        # axs[0].set_xlim([starttime*fs,endtime*fs])
-        # axs[1].set_xlim([starttime*fs,endtime*fs])
-        # # axs[1].set_xticks(np.linspace(starttime*fs_DIOx,endtime*fs_DIOx,5),np.linspace(starttime,endtime,5))
-        # # axs[1].set_xlabel('Time (sec)')
-        # axs[1].set_xticks([])
-
-
-        # axs[2].set_title('ROWNUMB - Row numbers and other msgs')
-        # axs[2].plot(ROWNUMB,'.')
-        # axs[2].plot(find_data_rows_ind,rows,'.')
-        # axs[2].set_xlim([starttime*fs,endtime*fs])
-        # axs[2].set_xticks(np.linspace(starttime*fs,endtime*fs,5),np.linspace(starttime,endtime,5))
-        # axs[2].set_xlabel('Time (sec)')
-
-        # fig.suptitle(self.name)
-        # fig.tight_layout()
-        # xxx
-        
 
         prev_row = rows[0]  # placeholder variable for previous row number
         counter = 0         # counter for number of cycles (i.e. number of times we wrap around from 255 to 0) in hdf row numbers
-
-        print('Unwrapping row numbers..')
-        start_time = time.time()
+        start = time.time()
+                      
         for ind in range(1,len(rows)):
             row = rows[ind]
             cycle = (row < prev_row) # row counter has cycled when the current row number is less than the previous
             counter += cycle
             rows[ind] = counter*256 + row
-            prev_row = row    
-			
-            if ind==1000: #to give an estimate of how long file will take to process
-                time_taken=time.time() - start_time
-                time_left= np.round(time_taken / ind * (len(rows) - ind) / 60)
-                print(f'Approx time remaining: {time_left} mins')
+            prev_row = row
+
+            if ind == 100:
+                time_per = (time.time() - start) / 100
+                time_left = (len(rows) - 100) * time_per / 60 #mins
+                print(f'Approx {time_left} mins remaining for row unraveling.')
 
         # Load data into dictionary
         hdf_times['row_number'] = rows
@@ -177,45 +146,44 @@ class nsyncHDF:
         hdf_times = self.extract_rows()
 
         # Save syncing data as .mat file
-        print('Saving..')
         mat_filename = self.path + '/' + self.name + '_syncHDF.mat'
         print(mat_filename)
         sp.io.savemat(mat_filename,hdf_times)
+        print('*'*30)
 
         return
 #%%
-# os.chdir(r'D:\brazos') # files that are downloaded
+os.chdir(r'C:\Users\crb4972\Desktop\whitehall')
+#os.chdir(r'D:\brazos') # files that are downloaded
 #os.chdir(r"D:\dropbox\Dropbox\Samantha lab\baseline") # on 
 #os.chdir(r"Z:\storage\rawdata\ripple")
 #os.chdir(r"/Volumes/Backup Plus/Airport/airp")
 #os.chdir(r"E:")
-# braz = nsyncHDF('braz20220407_04_te243.ns5')
-# braz = nsyncHDF(r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis\braz20250326_04_te1923.ns5") #bad
-braz = nsyncHDF(r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis\braz20250225_04_te1880\braz20250225_04_te1880.ns5") #good
+#braz = nsyncHDF('braz20220407_04_te243.ns5')
 #signals = braz.output['data']
 #fs = braz.output['samp_per_s']
+#braz.make_syncHDF_file() 
 
 
-
-# PROJ_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis"
-# # sessions = [#'braz20240927_01_te5384','braz20241001_03_te5390',#'braz20241002_04_te5394',
-# #             #'braz20241004_02_te5396',
-# #             #'braz20250221_03_te1873',#'braz20250225_04_te1880',
-# #             'braz20250228_03_te1888','braz20250327_04_te1927']#'braz20250326_04_te1923',]
-
-# # for session in sessions:
-# #     fname = os.path.join(PROJ_FOLDER,session,session)
-# #     print(fname)
-# #     braz = nsyncHDF(fname + '.ns5')
-# #     braz.make_syncHDF_file()
-
-# session = 'braz20250221_03_te1873'
-# fname = os.path.join(PROJ_FOLDER,session,session)
-# print(fname + '.ns5')
-# os.chdir(os.path.join(PROJ_FOLDER,session))
-# braz = nsyncHDF(session + '.ns5')
-# braz.make_syncHDF_file()
-    
+# Get files and folders from user input on command window
+#files = input('Enter filename (e.g. airp20251008_02_te2200) or list of filenames separated by spaces: ')
+#files = files.split()
+#for file in files:
+#	sync = nsyncHDF(ospath.join(os.getcwd(),file,file+'.ns5'))
+#	sync.make_syncHDF_file()
 
 
-# braz.make_syncHDF_file() 
+filepath = "S:\\storage\\ripple\\"
+files = [
+"airp20260708_05_te2496",
+"airp20260630_04_te2468",
+"airp20260625_05_te2453",
+"airp20260624_06_te2448"
+]
+filesuffix = '.ns5'
+
+# Run from idle shell on Yi computer
+
+for file in files:
+	sync = nsyncHDF(filepath + file + filesuffix)
+	sync.make_syncHDF_file()

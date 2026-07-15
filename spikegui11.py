@@ -291,6 +291,8 @@ class SpikeQualityGUI(QMainWindow):
             sorted_unit_idxs = set(np.nonzero(
                 [h[b'NEUEVWAV'].number_sorted_units for h in headers])[0])
             valid_idxs = [i for i in all_idxs if b'NEUEVLBL' in headers[i].keys()]
+            # valid_idxs = [i for i in valid_idxs
+            #   if 'C-1-28' in headers[i][b'NEUEVLBL'].label[:7].decode().lower()]
 
             unit_labels = []
             sorted_mask = []

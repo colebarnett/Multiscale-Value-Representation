@@ -54,8 +54,9 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
 import sys
 import gif
-import copy
+# import copy
 import time
+# import math
 # import pickle
 import sklearn
 # import neurodsp
@@ -65,9 +66,10 @@ import scipy as sp
 import pandas as pd
 import matplotlib_venn
 import statsmodels.api as sm
-from matplotlib.lines import Line2D
+import statsmodels.formula.api as sm_api
 from matplotlib import pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
 # from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 
@@ -126,19 +128,19 @@ SUBSESSIONS = ['all trials','stable block','volatile block']
 #             #'braz20250326_04_te1923' #commented out for code to run quicker
 #             ]
 
-SESSIONS = [ # 11 sessions with spike and lfp data for prelim testing
-            "airp20250919_02_te2177",  
-            "airp20251015_04_te2206",
-            "airp20251016_03_te2209",
-            "airp20251020_05_te2214",
-            "airp20251021_02_te2216",
-            "airp20251023_03_te2219",
-            "airp20251028_03_te2226",
-            "airp20251029_05_te2231",
-            "airp20251030_02_te2233",
-            "airp20251104_02_te2242", 
-            "airp20251111_02_te2250"
-            ]
+# SESSIONS = [ # 11 sessions with spike and lfp data for prelim testing
+#             "airp20250919_02_te2177",  
+#             "airp20251015_04_te2206",
+#             "airp20251016_03_te2209",
+#             "airp20251020_05_te2214",
+#             "airp20251021_02_te2216",
+#             "airp20251023_03_te2219",
+#             "airp20251028_03_te2226",
+#             "airp20251029_05_te2231",
+#             "airp20251030_02_te2233",
+#             "airp20251104_02_te2242", 
+#             "airp20251111_02_te2250"
+#             ]
 
 # SESSIONS = [ # 35 sessions. Full dataset as of 5/1/26
 #             "airp20250602_03_te2003",
@@ -178,6 +180,88 @@ SESSIONS = [ # 11 sessions with spike and lfp data for prelim testing
 #             "airp20260415_03_te2355"
 #             ]
 
+# SESSIONS = [ #since reaiming and new s-probe
+#             "airp20260708_05_te2496",
+#             "airp20260630_04_te2468",
+#             "airp20260625_05_te2453",
+#             "airp20260624_06_te2448"
+#             ]
+
+# SESSIONS = [ #all airport
+#             "airp20250602_03_te2003",
+#             "airp20250604_08_te2011",
+#             "airp20250617_03_te2031",
+#             "airp20250618_03_te2034",
+#             "airp20250626_03_te2049",
+#             "airp20250701_06_te2058",
+#             "airp20250826_05_te2135",
+#             "airp20250904_03_te2147",
+#             "airp20250910_02_te2156",
+#             "airp20250912_02_te2160",
+#             "airp20250919_02_te2177",
+#             "airp20251007_02_te2198",
+#             "airp20251008_02_te2200",
+#             # "airp20251015_04_te2206", too few trials
+#             "airp20251016_03_te2209",
+#             "airp20251020_05_te2214",
+#             "airp20251021_02_te2216",
+#             "airp20251023_03_te2219", #no good units
+#             "airp20251028_03_te2226",
+#             "airp20251029_05_te2231",
+#             "airp20251030_02_te2233",
+#             "airp20251104_02_te2242",
+#             "airp20251111_02_te2250",
+#             "airp20260224_03_te2287", #no good units
+#             "airp20260302_03_te2302",
+#             # "airp20260303_02_te2304", too few trials
+#             "airp20260305_12_te2321",
+#             "airp20260310_03_te2324", #no good units and Cd probe was lifted out. do not use for LFP either.
+#             "airp20260311_03_te2327", #no good units
+#             "airp20260403_03_te2337", #no good units
+#             "airp20260406_03_te2340",
+#             "airp20260408_03_te2343",
+#             #"airp20260409_03_te2346", #no good units, did not finish task
+#             "airp20260414_03_te2352",
+#             "airp20260415_03_te2355",
+#             "airp20260708_05_te2496",
+#             "airp20260630_04_te2468",
+#             "airp20260625_05_te2453",
+#             "airp20260624_06_te2448",
+#             ]
+
+SESSIONS = [
+            "braz20260728_03_te2536",
+            "braz20260729_03_te2539",
+            # "braz20260730_03_te2542", #need to sort
+            "braz20260731_03_te2545",
+            "braz20260803_03_te2548",
+            "braz20260804_03_te2551",
+            "braz20260805_03_te2554",
+            "braz20260806_03_te2557",
+            "braz20260810_03_te2560",
+            "braz20260811_03_te2563", 
+            "braz20260812_03_te2566", 
+            "braz20260813_03_te2569", 
+            "braz20260814_03_te2572", 
+            "braz20260817_03_te2575", 
+            "braz20260818_03_te2578", 
+            "braz20260821_03_te2581", 
+            "braz20260824_03_te2584", 
+            "braz20260827_03_te2587",
+            "braz20260828_03_te2590",
+            "braz20260901_03_te2593",
+            "braz20260902_03_te2596",
+            "braz20260908_03_te2599",
+            "braz20260909_03_te2602",
+            "braz20260910_03_te2605",
+            "braz20260911_03_te2608",
+            # "braz20260915_05_te2613",
+            # "braz20260916_03_te2616",
+            # "braz20260918_03_te2619",
+            # "braz20260924_03_te2622",
+            # "braz20260925_03_te2625", #need to sort
+            ]
+
 REGRESSORS = [
               'Q1',
               'Q2',
@@ -188,7 +272,7 @@ REGRESSORS = [
               # 'absQdiff',
               # 'Choice_high',
               'Side',
-              'Time'
+              'Time',
               ]
 
 FREQ_BANDS = {'Theta':(3.5,8.5), # Define freq bands (Hz)
@@ -198,9 +282,11 @@ FREQ_BANDS = {'Theta':(3.5,8.5), # Define freq bands (Hz)
               'Low Gamma':(30.5,60.5),
               'High Gamma':(60.5,200.5)}
 
-AREAS = ['vmPFC','Cd','OFC']
+AREAS = ['Cd','OFC']
 
-VALUE_MODEL = 'KernelAdaptive'
+REW_PROBS = [0., 0.2, 0.4, 0.6, 0.8, 1.]
+
+VALUE_MODEL = 'DualBaseline'
 
 ALIGNMENT = 'Targets On' 
 # Options are 'Targets On', 'Choice Made', and 'Reward' 
@@ -356,7 +442,6 @@ class ProcessSpikes:
             if self.verbose:
                 print(f'{self.unit_labels[i]} - Avg FR: {unit.item_count/recording_duration:.2f} Hz. ({i+1}/{len(unit_idxs)})')
         print('All spike times loaded!')
-        self.nevfile.close()
         self.nevfile = None
         
         # Save out spike times so we don't need to load them from nev again
@@ -371,7 +456,7 @@ class ProcessSpikes:
         # Load dict of previously saved spike times
         #spike_times_dict = utils.load_pkl('spike_times_dict',self.session,DATA_FOLDER) #OLD WAY USING ABOVE GET SPIKE TIMES METHOD
         try:
-            spike_times_dict = utils.load_pkl_2('goodunits_spike_times_dict_goodunits_spike_times_dict',self.session,DATA_FOLDER)
+            spike_times_dict = utils.load_pkl_2('goodunits_spike_times_dict',self.session,DATA_FOLDER)
         except:
             print('Spikes not manually sorted!!!!!!!!!!!!!!')
             self.get_spike_times()
@@ -922,11 +1007,12 @@ class ProcessBehavior:
     Output: DataFrame with behavioral details for regression.
     '''
     
-    def __init__(self, session: str):
+    def __init__(self, session: str, subsession: str):
         
 
         
         self.session = session
+        self.subsession = subsession
         self.file_prefix = os.path.join(DATA_FOLDER, self.session, self.session)
         
 #         # [Initiate different data files]
@@ -953,7 +1039,7 @@ class ProcessBehavior:
         # self.plot_choices()
         
         ## Save Out
-        self.dict_out = {'Session':session, 'df':self.behavior_df}
+        self.dict_out = {'Session':session, 'Subsession':subsession, 'df':self.behavior_df}
         
         
 
@@ -1020,11 +1106,7 @@ class ProcessBehavior:
         behavior = BehaviorAnalysis.ChoiceBehavior_Whitehall([self.hdf_file]) #method needs hdf filenames in a list
         
         # get choices, rewards, and trial type
-        choices,rewards = behavior.GetChoicesAndRewards()
-        Q1_choices = np.zeros_like(choices)
-        Q1_choices[choices==1] = 1.0 #1 if he chose Q1, 0 otherwise
-        Q2_choices = np.zeros_like(choices)
-        Q2_choices[choices==2] = 1.0 #1 if he chose Q2, 0 otherwise
+        choices,rewards,instructed_or_freechoice = behavior.GetChoicesAndRewards()
         
         # get block info (stable or volatile)
         if behavior.is_stable_block is not None:
@@ -1033,9 +1115,41 @@ class ProcessBehavior:
         else:
             is_stable_block, is_volatile_block = get_block_info(self.session)
             is_stable_block, is_volatile_block = is_stable_block[:len(choices)], is_volatile_block[:len(choices)] #trim to actual num of trials
-        
+
         # Actual reward probability of each target throughout task
         rew_probs_2, rew_probs_1 = behavior.GetRewardProbability(is_stable_block)
+        
+        # Get which side (left or right) each choice was
+        choice_side = behavior.GetTargetSideSelection()
+        choice_side = (choice_side-0.5)*2 #make to be -1 or 1
+        
+        # Chop all variables to specified subsession. All later variables are calculated using these.
+        if self.subsession == 'stable block':
+            choices = choices[np.nonzero(is_stable_block)]
+            rewards = rewards[np.nonzero(is_stable_block)]
+            instructed_or_freechoice = instructed_or_freechoice[np.nonzero(is_stable_block)]
+            rew_probs_1 = rew_probs_1[np.nonzero(is_stable_block)]
+            rew_probs_2 = rew_probs_2[np.nonzero(is_stable_block)]
+            choice_side = choice_side[np.nonzero(is_stable_block)]
+            is_volatile_block = is_volatile_block[np.nonzero(is_stable_block)]
+            is_stable_block = is_stable_block[np.nonzero(is_stable_block)]
+            assert np.all(is_stable_block==1) and np.all(is_volatile_block==0)
+        elif self.subsession == 'volatile block':
+            choices = choices[np.nonzero(is_volatile_block)]
+            rewards = rewards[np.nonzero(is_volatile_block)]
+            instructed_or_freechoice = instructed_or_freechoice[np.nonzero(is_volatile_block)]
+            rew_probs_1 = rew_probs_1[np.nonzero(is_volatile_block)]
+            rew_probs_2 = rew_probs_2[np.nonzero(is_volatile_block)]
+            choice_side = choice_side[np.nonzero(is_volatile_block)]
+            is_stable_block = is_stable_block[np.nonzero(is_volatile_block)]
+            is_volatile_block =  is_volatile_block[np.nonzero(is_volatile_block)]
+            assert np.all(is_stable_block==0) and np.all(is_volatile_block==1)
+        
+        # split choices for each targ into own variable    
+        Q1_choices = np.zeros_like(choices)
+        Q1_choices[choices==1] = 1.0 #1 if he chose Q1, 0 otherwise
+        Q2_choices = np.zeros_like(choices)
+        Q2_choices[choices==2] = 1.0 #1 if he chose Q2, 0 otherwise
         
         # make time regressor 
         time = np.arange(len(choices))
@@ -1046,13 +1160,14 @@ class ProcessBehavior:
         if Q_learning and learning_rates: #to do a specific learning rate (uses modified version of Rishi's method)
             beta=1 #beta doesn't matter since we are only interested in value here
             Q0 = 0.5*np.ones(2)
-            instructed_or_freechoice = np.full_like(choices,2)
+            # instructed_or_freechoice = np.full_like(choices,2) #all whitehall trials are free choice
             Q1,Q2,_,_,_,_ = BehaviorAnalysis.Calc_DistrQlearning_2Targs_DualBaseline(learning_rates[0],learning_rates[1],beta,Q0,choices,rewards,instructed_or_freechoice)
             # [Q1,Q2] = BehaviorAnalysis.CalcValue_2Targs_QLearning(choices,rewards,learning_rate) #this is slower. don't need to solve for beta since we dont care about fitting based on choice prob
         elif Q_learning and not learning_rates: #do Rishi's Q-learning method w/ specified model
             vmc = ValueModelingClass()
-            value_dict = vmc.get_values(self.hdf_file, num_trials_A=0, num_trials_B=0, method=VALUE_MODEL)
+            value_dict = vmc.get_values(choices, rewards, instructed_or_freechoice, num_trials_A=0, num_trials_B=0, method=VALUE_MODEL)
             [Q1,Q2] = [value_dict['Q_low'],value_dict['Q_high']]
+            self.Q_learning_params = value_dict['params']
         else: # do empirical value 
             [Q1,Q2], _ = behavior.CalcValue_2Targs(choices,rewards,win_sz=10,smooth=True)
             
@@ -1130,9 +1245,7 @@ class ProcessBehavior:
             
             
             
-        # Get which side (left or right) each choice was
-        choice_side = behavior.GetTargetSideSelection()
-        choice_side = (choice_side-0.5)*2 #make to be -1 or 1
+
         
 #         # get which center holds were stimulated
 #         stim_holds= (choices==1) * (instructed_or_freechoice==1) #get forced LV holds
@@ -1145,7 +1258,8 @@ class ProcessBehavior:
 #                 stim_holds[i]=0
 
 
-        assert len(choices) == len(choice_side) == len(time) == len(Q1) == len(Q2) == len(rpe) == len(is_stable_block)       
+        assert len(choices) == len(choice_side) == len(time) == len(Q1) == len(Q2) == len(rpe) == len(is_stable_block) == len(rew_probs_1)
+
         
         self.behavior_df = pd.DataFrame.from_dict(
             {'Q1':Q1,       'Q2':Q2,        'Choice1':Q1_choices,     'Choice2':Q2_choices, 
@@ -1160,8 +1274,11 @@ class ProcessBehavior:
         
         if not Q_learning:
             print('Behavior loaded!')
+            
+        if self.behavior_df.isna().values.any():
+            print('!'*20,f'\nNans found in behavior df for {self.session}',self.behavior_df)
+            
 
-        
         return
         
     
@@ -1217,13 +1334,147 @@ class ProcessBehavior:
       
         fig.suptitle(self.session)
         
-        return fig      
+        return fig   
+    
+    def plot_values_vs_choices_vs_rewprob(self,num_targs=1,num_trials_to_plot=200,save_flag=False):
+        
+        fig,ax=plt.subplots()
+        
+        #actual rew prob
+        ax.plot(self.behavior_df['Rew_prob_1'].iloc[:num_trials_to_plot],color='k',linestyle='--',label='Reward Probability 1')
+        if num_targs==2:
+            ax.plot(self.behavior_df['Rew_prob_2'].iloc[:num_trials_to_plot],color='gray',linestyle='--',label='Reward Probability 2')
+        
+        #smoothed choice prob
+        window_length=10
+        P_LV = BehaviorAnalysis.trial_sliding_avg(self.behavior_df['Choice1'],window_length)
+        P_HV = BehaviorAnalysis.trial_sliding_avg(1 - self.behavior_df['Choice1'],window_length)
+        ax.plot(P_LV[:num_trials_to_plot],color='red',label='Choice 1')
+        if num_targs==2:
+            ax.plot(P_HV[:num_trials_to_plot],color='green',label='Choice 2')
+            
+        #Q-learning values
+        ax.plot(self.behavior_df['Q1'].iloc[:num_trials_to_plot],color='orange',label='Q1')
+        if num_targs==2:
+            ax.plot(self.behavior_df['Q2'].iloc[:num_trials_to_plot],color='turquoise',label='Q2')
+            
+        #plot labels
+        ax.set_title('Modeled Values vs Actual Choices vs Actual Rew Prob')
+        ax.legend()
+        ax.set_xlabel('Trials')
+        
+        fig.suptitle(self.session)
+        
+        if save_flag:
+            utils.save_svg(fig,self.session,'ValueVsChoicesVsRewProb',PROJ_FOLDER)
+        
+        return fig
+    
+    
+    def plot_values_vs_choices(self,num_targs=1,num_trials_to_plot=200,save_flag=False):
+        
+        fig,ax=plt.subplots()
+        
+        #smoothed choice prob
+        window_length=10
+        P_LV = BehaviorAnalysis.trial_sliding_avg(self.behavior_df['Choice1'],window_length)
+        P_HV = BehaviorAnalysis.trial_sliding_avg(1 - self.behavior_df['Choice1'],window_length)
+        ax.plot(P_LV[:num_trials_to_plot],color='red',label='Choice 1')
+        if num_targs==2:
+            ax.plot(P_HV[:num_trials_to_plot],color='green',label='Choice 2')
+            
+        #Q-learning values
+        ax.plot(self.behavior_df['Q1'].iloc[:num_trials_to_plot],color='orange',label='Q1')
+        if num_targs==2:
+            ax.plot(self.behavior_df['Q2'].iloc[:num_trials_to_plot],color='turquoise',label='Q2')
+            
+        #plot labels
+        ax.set_title('Modeled Values vs Actual Choices')
+        ax.legend()
+        ax.set_xlabel('Trials')
+        
+        fig.suptitle(self.session)
+        
+        if save_flag:
+            utils.save_svg(fig,self.session,'ValueVsChoices',PROJ_FOLDER)
+        
+        return fig
+    
+    
+    def plot_values_vs_rewards(self,num_targs=2,num_trials_to_plot=200,save_flag=False):
+        
+        fig,ax=plt.subplots()
+            
+        #Q-learning values
+        ax.plot(self.behavior_df['Q1'].iloc[:num_trials_to_plot],color='orange',label='Q1')
+        if num_targs==2:
+            ax.plot(self.behavior_df['Q2'].iloc[:num_trials_to_plot],color='turquoise',label='Q2')
+            
+        #Rewards
+        for trial in range(num_trials_to_plot):
+            if self.behavior_df['Choice1'].iloc[trial] == 1:
+                if self.behavior_df['Reward'].iloc[trial] == 1:
+                    ax.plot(trial,self.behavior_df['Q1'].iloc[trial],color='orange',marker='^') #rewarded choice 1s
+                else:
+                    ax.plot(trial,self.behavior_df['Q1'].iloc[trial],color='orange',marker='s') #unrewarded choice 1s
+            
+            if num_targs==2:
+                if self.behavior_df['Choice2'].iloc[trial] == 1:
+                    if self.behavior_df['Reward'].iloc[trial] == 1:
+                        ax.plot(trial,self.behavior_df['Q2'].iloc[trial],color='turquoise',marker='^') #rewarded choice 2s
+                    else:
+                        ax.plot(trial,self.behavior_df['Q2'].iloc[trial],color='turquoise',marker='s') #unrewarded choice 2s
+        
+            
+        #plot labels
+        ax.set_title('Modeled Values vs Rewards')
+        triangles = mlines.Line2D([], [], color='k', marker='^',label='Rewarded')
+        squares = mlines.Line2D([], [], color='k', marker='s',label='Unrewarded')
+        handles, labels = ax.get_legend_handles_labels()
+        handles.append(triangles)
+        handles.append(squares)
+        ax.legend(handles=handles)
+        ax.set_xlabel('Trials')
+        
+        fig.suptitle(self.session)
+        
+        if save_flag:
+            utils.save_svg(fig,self.session,'ValueVsRews',PROJ_FOLDER)
+        
+        return fig
+    
+    
+    def plot_values_vs_rewprob(self,num_targs=2,num_trials_to_plot=200,save_flag=False):
+
+        fig,ax=plt.subplots()
+        
+        #Q-learning values
+        ax.plot(self.behavior_df['Q1'].iloc[:num_trials_to_plot],color='red',label='Q1')
+        if num_targs==2:
+            ax.plot(self.behavior_df['Q2'].iloc[:num_trials_to_plot],color='green',label='Q2')
+        
+        #actual rew prob
+        ax.plot(self.behavior_df['Rew_prob_1'].iloc[:num_trials_to_plot],color='red',linestyle='--',label='Reward Probability 1')
+        if num_targs==2:
+            ax.plot(self.behavior_df['Rew_prob_2'].iloc[:num_trials_to_plot],color='green',linestyle='--',label='Reward Probability 2')
+        
+        #plot labels
+        ax.set_title('Modeled Values vs Actual Reward Probability')
+        ax.legend()
+        ax.set_xlabel('Trials')
+        
+        fig.suptitle(self.session)   
+        
+        if save_flag:
+            utils.save_svg(fig,self.session,'ValueVsRewProb',PROJ_FOLDER)
+        
+        return fig
     
     def plot_value_dist(self,save_flag=False):
         
         def get_values_rewprob_volatility(df,stable_or_volatile,rew_prob):
-            Q1 = df['Q1'].loc[(df[stable_or_volatile]==1) & (df['rew_prob_1']==rew_prob)]
-            Q2 = df['Q2'].loc[(df[stable_or_volatile]==1) & (df['rew_prob_2']==rew_prob)]
+            Q1 = df['Q1'].loc[(df[stable_or_volatile]==1) & (df['Rew_prob_1']==rew_prob)]
+            Q2 = df['Q2'].loc[(df[stable_or_volatile]==1) & (df['Rew_prob_2']==rew_prob)]
             
             return np.concatenate([Q1,Q2])
         
@@ -1233,6 +1484,8 @@ class ProcessBehavior:
         
         # rewprob = 0/1 plot
         fig,ax=plt.subplots()
+        fig.suptitle(self.session)
+        ax.set_title('Easy Choices')
         for i,stable_or_volatile in enumerate(['Stable','Volatile']):
             for ii,rew_prob in enumerate([0.,1.]):
                 values = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
@@ -1241,6 +1494,8 @@ class ProcessBehavior:
                 
         # rewprob = 0.2/0.8 plot
         fig,ax=plt.subplots()
+        fig.suptitle(self.session)
+        ax.set_title('Medium Choices')
         for i,stable_or_volatile in enumerate(['Stable','Volatile']):
             for ii,rew_prob in enumerate([0.2,0.8]):
                 values = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
@@ -1250,6 +1505,8 @@ class ProcessBehavior:
                 
         # rewprob = 0.4/0.6 plot
         fig,ax=plt.subplots()
+        fig.suptitle(self.session)
+        ax.set_title('Hard Choices')
         for i,stable_or_volatile in enumerate(['Stable','Volatile']):
             for ii,rew_prob in enumerate([0.4,0.6]):
                 values = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
@@ -1257,82 +1514,43 @@ class ProcessBehavior:
                         label=stable_or_volatile,linestyle=LINESTYLES[i],color=COLORS[ii])
         
             
-        ## Variance Bar plots
+        # ## Variance Bar plots
         
-        # rewprob = 0/1 plot
-        fig,ax=plt.subplots()
-        for i,stable_or_volatile in enumerate(['Stable','Volatile']):
-            rew_prob = 0.
-            values1 = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
-            rew_prob = 1.
-            values2 = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
-            values = np.concatenate([values1,values2])
-            ax.bar(i,np.var(values),label=stable_or_volatile,hatch=HATCHSTYLES[i],color='gray')
-                
-        # rewprob = 0.2/0.8 plot
-        fig,ax=plt.subplots()
-        for i,stable_or_volatile in enumerate(['Stable','Volatile']):
-            rew_prob = 0.2
-            values1 = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
-            rew_prob = 0.8
-            values2 = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
-            values = np.concatenate([values1,values2])
-            ax.bar(i,np.var(values),label=stable_or_volatile,hatch=HATCHSTYLES[i],color='gray')
-                
-                
-        # rewprob = 0.4/0.6 plot
-        fig,ax=plt.subplots()
-        for i,stable_or_volatile in enumerate(['Stable','Volatile']):
-            rew_prob = 0.4
-            values1 = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
-            rew_prob = 0.6
-            values2 = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
-            values = np.concatenate([values1,values2])
-            ax.bar(i,np.var(values),label=stable_or_volatile,hatch=HATCHSTYLES[i],color='gray')
-                
-        # df = self.behavior_df
-        # Q1_vol = df['Q1'].loc[df['Volatile']==1]
-        # Q1_stab = df['Q1'].loc[df['Stable']==1]
-        # # Q2_vol = df['Q2'].loc[df['Volatile']==1]
-        # # Q2_stab = df['Q2'].loc[df['Stable']==1]
-        # kurt_vol = sp.stats.kurtosis(Q1_vol)
-        # kurt_stab = sp.stats.kurtosis(Q1_stab)
-        
-        
-        
+        # # rewprob = 0/1 plot
         # fig,ax=plt.subplots()
-        
-        # ax.hist(Q1_vol,density=True,bins=bins,label='Volatile',color='red',alpha=0.5)
-        # ax.hist(Q1_stab,density=True,bins=bins,label='Stable',color='blue',alpha=0.5)
-        # ax.legend()
-        # ax.set_title('Actual Value Distributions')
-        # fig.suptitle(self.session)
-        
-        # #flip around to make bimodal dist look normal
-        # Q1_vol=np.array(Q1_vol)
-        # Q1_vol[Q1_vol>0.5] = 1.5-Q1_vol[Q1_vol>0.5]
-        # Q1_vol[Q1_vol<0.5] = 0.5-Q1_vol[Q1_vol<0.5]
-        # Q1_stab=np.array(Q1_stab)
-        # Q1_stab[Q1_stab>0.5] = 1.5-Q1_stab[Q1_stab>0.5]
-        # Q1_stab[Q1_stab<0.5] = 0.5-Q1_stab[Q1_stab<0.5]
-        
+        # for i,stable_or_volatile in enumerate(['Stable','Volatile']):
+        #     rew_prob = 0.
+        #     values1 = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
+        #     rew_prob = 1.
+        #     values2 = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
+        #     values = np.concatenate([values1,values2])
+        #     ax.bar(i,np.var(values),label=stable_or_volatile,hatch=HATCHSTYLES[i],color='gray')
+                
+        # # rewprob = 0.2/0.8 plot
         # fig,ax=plt.subplots()
+        # for i,stable_or_volatile in enumerate(['Stable','Volatile']):
+        #     rew_prob = 0.2
+        #     values1 = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
+        #     rew_prob = 0.8
+        #     values2 = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
+        #     values = np.concatenate([values1,values2])
+        #     ax.bar(i,np.var(values),label=stable_or_volatile,hatch=HATCHSTYLES[i],color='gray')
+                
+                
+        # # rewprob = 0.4/0.6 plot
+        # fig,ax=plt.subplots()
+        # for i,stable_or_volatile in enumerate(['Stable','Volatile']):
+        #     rew_prob = 0.4
+        #     values1 = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
+        #     rew_prob = 0.6
+        #     values2 = get_values_rewprob_volatility(self.behavior_df,stable_or_volatile,rew_prob)
+        #     values = np.concatenate([values1,values2])
+        #     ax.bar(i,np.var(values),label=stable_or_volatile,hatch=HATCHSTYLES[i],color='gray')
+
         
-        # ax.hist(Q1_vol,density=True,bins=bins,label='Volatile',color='red',alpha=0.5)
-        # ax.hist(Q1_stab,density=True,bins=bins,label='Stable',color='blue',alpha=0.5)
-        # ax.legend()
-        # ax.set_title('Flipped Value Distributions')
-        # fig.suptitle(self.session)
         
-        #Q1
-        # ax.hist([Q1_vol,Q1_stab], histtype='bar', stacked=True, density=True, label=['Volatile','Stable'])
-        # ax.legend()
-        # fig.suptitle(self.session)
         
-        # #Q2
-        # ax=axs[1]
-        # ax.hist(np.array(Q2_vol,Q2_stab),label=['Volatile','Stable'])
-        # ax.legend()
+
         
         
         
@@ -1768,7 +1986,7 @@ class LearningRate_Analysis:
                 return
             
             # Get learning rate for each unit
-            if not overwrite_flag: #don't overwrite, load
+            if not overwrite_flag and utils.does_csv_exist('LearningRates',session,DATA_FOLDER): #don't overwrite, load
                 learning_rate_df = utils.load_csv('LearningRates',session,DATA_FOLDER)
             else: #don't load, compute
                 Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
@@ -1793,10 +2011,15 @@ class LearningRate_Analysis:
         utils.save_csv(self.allsess_lr_df,'LearningRates','',DATA_FOLDER)
         utils.save_csv(self.allsess_nt_df,'NeuronTypes','',DATA_FOLDER)
         suptitle = 'AllSessions'
-        self.plot_learning_rate_dual_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        # self.plot_learning_rate_changes_hist(allsess_lr_df,allsess_nt_df,suptitle,fig_folder)
-        # self.plot_learning_rate_paired_changes_dual(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        self.plot_learning_rate_scatter(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_dual_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        self.plot_learning_rate_dual_hists(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_winbias_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        ### old! self.plot_learning_rate_changes_hist(allsess_lr_df,allsess_nt_df,suptitle,fig_folder)
+        ### old! self.plot_learning_rate_paired_changes_dual(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_scatter_1(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_scatter_2(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_scatter_all_combined(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_winbias_hist(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
         
         return 
         
@@ -1818,23 +2041,27 @@ class LearningRate_Analysis:
                 continue
             else:
                 print(stable_or_volatile)
-                
         
             # Get FR for each neuron
             units = fr_df.columns
+            for i,unit in enumerate(units):
+                neuron_type = utils.get_unit_data(neuron_type_df,f'{unit} - {stable_or_volatile}','Neuron Type')
+                print(neuron_type)
+                print('Q' in neuron_type)
+            xxx
             for i,unit in enumerate(units):
                 
                 start = time.time()
                 
                 fr = fr_df[unit].iloc[trials] #vector of FRs for subsession trial
                 
-    
+                ## Get regression weights for all learning rate combos
                 #loop thru all possible learning rates
                 df_rows_regression_weights = []
                 for pos_alpha in LEARNING_RATES:
                     for neg_alpha in LEARNING_RATES:
                     
-                        # get beahvior according to current learning rate
+                        # get beahvior according to current learning rates
                         Behavior.get_behavior(Q_learning=True, learning_rates=[pos_alpha,neg_alpha])
                         regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
                     
@@ -1843,7 +2070,9 @@ class LearningRate_Analysis:
                     
                         row_dict_regression_weights = {'pos_alpha':pos_alpha, 'neg_alpha':neg_alpha} #each row of the df will be the lrs for each reg
                         # Get weights for each regressor
-                        regressor_names = res.params.keys()
+                        regressor_names = res.params.keys() #includes const in idx 0
+                        
+                        #loop thru all regressors
                         for j in range(len(regressor_names)):
                             if res.pvalues[regressor_names[j]] < ALPHA_THRESHOLD and res.f_pvalue < ALPHA_THRESHOLD: #if signif
                                 row_dict_regression_weights[regressor_names[j]] = abs(res.params.values[j]) #fill in the row of the df with param
@@ -1854,7 +2083,8 @@ class LearningRate_Analysis:
                 
                 # Organize regression weights for each learning rate into a df  
                 regression_weights_df = pd.DataFrame(df_rows_regression_weights)
-                
+                print(regression_weights_df)
+                xxx
                 # utils.save_csv(regression_weights_df,'RegressionWeights',"debug",DATA_FOLDER)
                 
                 # Find learning rate combination which maximizes each regression weight
@@ -1862,13 +2092,17 @@ class LearningRate_Analysis:
                 row_dict_learning_rates = {'Unit':unit_subsession_labeled}
                 for j in range(len(REGRESSORS)):
                     
-                    if not np.all(np.isnan(regression_weights_df[REGRESSORS[j]])): #to catch if all regression weights are nan
-                        # idx of max regression weight for current regressor
-                        idx_max_regressor = regression_weights_df[REGRESSORS[j]].idxmax()
-                        
-                        # Find and store learning rate which corresponds to max regression weight
-                        row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['pos_alpha'].iloc[idx_max_regressor]
-                        row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['neg_alpha'].iloc[idx_max_regressor]
+                    #only do if this neuron was found to encode that regressor
+                    neuron_type = utils.get_unit_data(neuron_type_df,unit,'Neuron Type')
+                    if REGRESSORS[j] in neuron_type:
+                    
+                        if not np.all(np.isnan(regression_weights_df[REGRESSORS[j]])): #to catch if all regression weights are nan
+                            # idx of max regression weight for current regressor
+                            idx_max_regressor = regression_weights_df[REGRESSORS[j]].idxmax()
+                            
+                            # Find and store learning rate which corresponds to max regression weight
+                            row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['pos_alpha'].iloc[idx_max_regressor]
+                            row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['neg_alpha'].iloc[idx_max_regressor]
                     
                     else: #if all weights are nan
                         # Put in np.nan since its more consistent when saving and loading dfs
@@ -1886,7 +2120,7 @@ class LearningRate_Analysis:
         # xxx
         
         #filter so that learning rates are only displayed for regressors that are encoded by that unit
-        # learning_rate_df = filter_learning_rates(learning_rate_df,neuron_type_df) not needed. filtering done in plotting methods i think.
+        # learning_rate_df = filter_learning_rates(learning_rate_df,neuron_type_df) not needed. filtering done by seeing if best regression passes alpha thresh
     
         return learning_rate_df
 
@@ -2028,6 +2262,103 @@ class LearningRate_Analysis:
                 )
 
         return
+
+
+    def plot_winbias_violins(self,learning_rate_df, neuron_type_df, suptitle, fig_folder):
+
+        cols = learning_rate_df.columns
+        areas = AREAS + ['all areas']
+
+        # Pair up positive and negative learning rate columns that share the same neuron type suffix.
+        # Expected column naming: 'Positive Learning rate for Q...' / 'Negative Learning rate for Q...'
+        pos_cols = {col: col for col in cols if 'Q' in col and col.startswith('Pos')}
+        neg_cols = {col: col for col in cols if 'Q' in col and col.startswith('Neg')}
+
+        # Match pairs by stripping the sign prefix so we can iterate together.
+        # e.g. 'Positive Learning rate for Q_value' -> 'Learning rate for Q_value'
+        
+
+        # paired_suffixes = sorted(
+        #     set(strip_sign_prefix(c) for c in pos_cols) &
+        #     set(strip_sign_prefix(c) for c in neg_cols)
+        # )
+        # Also handle any unpaired columns (only pos or only neg) gracefully.
+        all_suffixes = sorted(
+            set(self._strip_sign_prefix(c) for c in list(pos_cols) + list(neg_cols))
+        )
+
+        for i, area in enumerate(areas):
+
+            area_neuron_type_df = utils.area_parser(neuron_type_df, area)
+            area_learning_rate_df = utils.area_parser(learning_rate_df, area)
+
+            if area_learning_rate_df.empty:  # if no units for this area, skip
+                continue
+
+            unique_units = utils.get_unique_units(area_learning_rate_df["Unit"], SUBSESSIONS)
+
+            for suffix in all_suffixes:
+                pos_col = f'Pos {suffix}'
+                neg_col = f'Neg {suffix}'
+                has_pos = pos_col in cols
+                has_neg = neg_col in cols
+
+                col_noprefix = suffix.removeprefix('Learning Rate for ')
+
+                pos_vols, pos_stabs = self._collect_pairs(pos_col,unique_units,area_learning_rate_df) if pos_col else ([], [])
+                neg_vols, neg_stabs = self._collect_pairs(neg_col,unique_units,area_learning_rate_df) if neg_col else ([], [])
+
+                # # Skip entirely if there is nothing to plot.
+                # if not pos_rates and not neg_rates:
+                #     print(f'{area} {col_noprefix}: no data, skipped!')
+                #     continues
+                
+                # compute winbias
+                winbias_vols = np.array(pos_vols) - np.array(neg_vols)
+                label_vols = f'volatile block\nnum_units: {len(winbias_vols)}'
+                winbias_stabs = np.array(pos_stabs) - np.array(neg_stabs)
+                label_stabs = f'stable block\nnum_units: {len(winbias_stabs)}'
+                winbias_delta = winbias_vols - winbias_stabs
+                label_delta = f'volatile - stable\nnum_units: {len(winbias_delta)}'
+
+                fig, axs = plt.subplots(1,2)
+
+                def _draw_violin(ax, rates_list, labels_list, colors_list, axis_label, ylims):
+                    x = np.arange(1, len(rates_list) + 1)
+                    violin = ax.violinplot(rates_list)
+                    for i,pc in enumerate(violin['bodies']):
+                        pc.set_facecolor(colors_list[i])
+                        pc.set_edgecolor(colors_list[i])
+                        ax.plot(x[i]-0.015,np.mean(rates_list[i]),color=COLORS[i],marker='>')
+                    ax.hlines(0,min(x)-0.25,max(x)+0.25,color='k',linestyle='dashed')
+                    ax.set_xticks(x, labels_list)
+                    ax.set_ylabel(f'{axis_label}')
+                    ax.set_ylim(ylims)
+                    ax.set_title(f'{axis_label}\n{area} — {col_noprefix}')
+                    # print(suffix, area)
+                    # print(labels)
+                    # print(rates_list)
+
+
+                _draw_violin(axs[0], [winbias_stabs,winbias_vols], [label_stabs,label_vols], [COLORS[0],COLORS[1]],'Win-Bias',[-1.1, 1.1])
+                _draw_violin(axs[1], [winbias_delta], [label_delta], [COLORS[2]], 'Delta Win-Bias',[-2.2, 2.2])
+
+                fig.suptitle(suptitle)
+                fig.tight_layout()
+                plt.show()
+
+                utils.save_svg(
+                    fig,
+                    f'{suptitle}_{area}_{col_noprefix}_winbias_violin',
+                    fig_folder,
+                    PROJ_FOLDER,
+                )
+
+        return
+
+
+
+
 
     # def plot_learning_rate_violins(self,learning_rate_df,neuron_type_df,suptitle,fig_folder): 
         
@@ -2327,7 +2658,7 @@ class LearningRate_Analysis:
         return
     
     
-    def plot_learning_rate_scatter(self, learning_rate_df, neuron_type_df, suptitle, fig_folder):
+    def plot_learning_rate_scatter_1(self, learning_rate_df, neuron_type_df, suptitle, fig_folder):
     
         cols = learning_rate_df.columns
         areas = AREAS + ['all areas']
@@ -2405,6 +2736,464 @@ class LearningRate_Analysis:
                         f'{sign_label} Learning Rate\n'
                         f'Total number of {area} {col_noprefix} units: {num_units}'
                     )
+    
+                fig.suptitle(suptitle)
+                fig.tight_layout()
+    
+                utils.save_svg(
+                    fig,
+                    f'{suptitle}_{area}_{col_noprefix}_scatter',
+                    fig_folder,
+                    PROJ_FOLDER,
+                )
+    
+        return
+    
+    
+    def plot_learning_rate_scatter_2(self, learning_rate_df, neuron_type_df, suptitle, fig_folder):
+    
+        cols = learning_rate_df.columns
+        areas = AREAS + ['all areas']
+    
+        # Pair positive and negative LR columns by their shared neuron-type suffix.
+        # Expected naming: 'Positive Learning rate for Q...' / 'Negative Learning rate for Q...'
+        pos_cols = {self._strip_sign_prefix(c): c for c in cols if 'Q' in c and c.startswith('Pos')}
+        neg_cols = {self._strip_sign_prefix(c): c for c in cols if 'Q' in c and c.startswith('Neg')}
+        all_suffixes = sorted(set(pos_cols) | set(neg_cols))
+    
+        for i, area in enumerate(areas):
+    
+            area_neuron_type_df = utils.area_parser(neuron_type_df, area)
+            area_learning_rate_df = utils.area_parser(learning_rate_df, area)
+    
+            print(area)
+            if area_learning_rate_df.empty:
+                print('skipped!')
+                continue
+    
+            unique_units = utils.get_unique_units(area_learning_rate_df["Unit"], SUBSESSIONS)
+    
+            for suffix in all_suffixes:
+                pos_col = pos_cols.get(suffix)
+                neg_col = neg_cols.get(suffix)
+                col_noprefix = suffix.removeprefix('Learning Rate for ')
+    
+                
+    
+                pos_vols, pos_stabs = self._collect_pairs(pos_col,unique_units,area_learning_rate_df) if pos_col else ([], [])
+                neg_vols, neg_stabs = self._collect_pairs(neg_col,unique_units,area_learning_rate_df) if neg_col else ([], [])
+    
+                # Skip if neither sign has data.
+                panels = [(pos_stabs, neg_stabs, 'Stable'), (pos_vols, neg_vols, 'Volatile')]
+                panels = [(p, n, lbl) for p, n, lbl in panels if len(p) > 0]
+                if not panels:
+                    continue
+    
+                fig, axes = plt.subplots(1, len(panels), figsize=(6 * len(panels), 5), sharey=True)
+                if len(panels) == 1:
+                    axes = [axes]
+    
+                color_increase, color_decrease = 'gray', COLORS[i]
+    
+                for ax, (poss, negs, block_label) in zip(axes, panels):
+                    num_units = len(poss)
+    
+                    for pos, neg in zip(poss, negs):
+                        color = color_increase if neg >= pos else color_decrease
+                        ax.scatter(pos, neg, color=color)
+    
+                    # Mean
+                    ax.scatter(np.mean(poss), np.mean(negs),
+                               color='k', linewidth=2, marker="D")
+                    
+                    # Diagonal
+                    ax.plot([0,1],[0,1],'--',linewidth=2,color='k')
+    
+                    ax.set_xlim(-0.1, 1.1)
+                    ax.set_ylim(-0.1, 1.1)
+                    ax.set_ylabel(f'Negative Learning Rate', fontsize=12)
+                    ax.set_xlabel(f'Positive Learning Rate', fontsize=12)
+    
+                    legend_handles = [
+                        mpatches.Patch(color=color_increase, label="Increased"),
+                        mpatches.Patch(color=color_decrease, label="Decreased"),
+                        plt.Line2D([0], [0], color='k', marker="D", markersize=7,
+                                   label="Mean", linewidth=2),
+                        plt.Line2D([0], [0], color='k', linestyle="--",
+                                   label="Diagonal", linewidth=2)
+                    ]
+                    ax.legend(handles=legend_handles, fontsize=8.5, frameon=False,
+                              loc="upper left", labelcolor="#444")
+                    ax.set_title(
+                        f'{block_label} Blocks\n'
+                        f'Total number of {area} {col_noprefix} units: {num_units}'
+                    )
+    
+                fig.suptitle(suptitle)
+                fig.tight_layout()
+    
+                utils.save_svg(
+                    fig,
+                    f'{suptitle}_{area}_{col_noprefix}_scatter',
+                    fig_folder,
+                    PROJ_FOLDER,
+                )
+    
+        return
+
+
+    def plot_learning_rate_dual_hists(self, learning_rate_df, neuron_type_df, suptitle, fig_folder):
+    
+        cols = learning_rate_df.columns
+        areas = AREAS + ['all areas']
+    
+        # Pair positive and negative LR columns by their shared neuron-type suffix.
+        # Expected naming: 'Positive Learning rate for Q...' / 'Negative Learning rate for Q...'
+        pos_cols = {self._strip_sign_prefix(c): c for c in cols if 'Q' in c and c.startswith('Pos')}
+        neg_cols = {self._strip_sign_prefix(c): c for c in cols if 'Q' in c and c.startswith('Neg')}
+        all_suffixes = sorted(set(pos_cols) | set(neg_cols))
+    
+        for i, area in enumerate(areas):
+    
+            area_neuron_type_df = utils.area_parser(neuron_type_df, area)
+            area_learning_rate_df = utils.area_parser(learning_rate_df, area)
+    
+            print(area)
+            if area_learning_rate_df.empty:
+                print('skipped!')
+                continue
+    
+            unique_units = utils.get_unique_units(area_learning_rate_df["Unit"], SUBSESSIONS)
+    
+            for suffix in all_suffixes:
+                pos_col = pos_cols.get(suffix)
+                neg_col = neg_cols.get(suffix)
+                col_noprefix = suffix.removeprefix('Learning Rate for ')
+    
+                
+    
+                pos_vols, pos_stabs = self._collect_pairs(pos_col,unique_units,area_learning_rate_df) if pos_col else ([], [])
+                neg_vols, neg_stabs = self._collect_pairs(neg_col,unique_units,area_learning_rate_df) if neg_col else ([], [])
+    
+                # Skip if neither sign has data.
+                if len(pos_vols)==0 and len(neg_vols)==0:
+                    continue
+
+                ## Pos LR
+                fig,ax = plt.subplots()
+                
+                #hists
+                ax.hist(pos_vols,label='volatile',bins=20,range=(0,1),alpha=0.5,color='tab:blue')
+                ax.hist(pos_stabs,label='stable',bins=20,range=(0,1),alpha=0.5,color='tab:orange')
+                #mean markers
+                y_max1 = np.max(np.histogram(pos_vols,bins=20,range=(0,1))[0])
+                y_max2 = np.max(np.histogram(pos_stabs,bins=20,range=(0,1))[0])
+                y_max = np.max([y_max1,y_max2])
+                ax.plot(np.mean(pos_vols),y_max,marker='v',color='tab:blue')
+                ax.plot(np.mean(pos_stabs),y_max,marker='v',color='tab:orange')
+                #plot details
+                ax.set_title(f'Positive LR Histogram - {area}\n{col_noprefix}')
+                ax.set_ylabel('Number of neurons')
+                ax.set_xlabel('Positive Learning Rate')
+                ax.legend()
+
+                fig.suptitle(suptitle)
+                fig.tight_layout()
+                
+                #stats
+                print('-'*25)
+                print('Pos LR: volatile vs stable')
+                print(suffix)
+                print(area)
+                res = sp.stats.ttest_ind(pos_stabs, pos_vols, equal_var=True)
+                print(res)
+    
+                utils.save_svg(
+                    fig,
+                    f'{suptitle}_{area}_{col_noprefix}_posLRhist',
+                    fig_folder,
+                    PROJ_FOLDER,
+                )
+
+                ## Neg LR
+                fig,ax = plt.subplots()
+                
+                #hists
+                ax.hist(neg_vols,label='volatile',bins=20,range=(0,1),alpha=0.5,color='tab:blue')
+                ax.hist(neg_stabs,label='stable',bins=20,range=(0,1),alpha=0.5,color='tab:orange')
+                #mean markers
+                y_max1 = np.max(np.histogram(neg_vols,bins=20,range=(0,1))[0])
+                y_max2 = np.max(np.histogram(neg_stabs,bins=20,range=(0,1))[0])
+                y_max = np.max([y_max1,y_max2])
+                ax.plot(np.mean(neg_vols),y_max,marker='v',color='tab:blue')
+                ax.plot(np.mean(neg_stabs),y_max,marker='v',color='tab:orange')
+                #plot details
+                ax.set_title(f'Negative LR Histogram - {area}\n{col_noprefix}')
+                ax.set_ylabel('Number of neurons')
+                ax.set_xlabel('Negative Learning Rate')
+                ax.legend()
+
+                fig.suptitle(suptitle)
+                fig.tight_layout()
+                
+                #stats
+                print('-'*25)
+                print('Neg LR: volatile vs stable')
+                print(suffix)
+                print(area)
+                res = sp.stats.ttest_ind(neg_stabs, neg_vols, equal_var=True)
+                print(res)
+    
+                utils.save_svg(
+                    fig,
+                    f'{suptitle}_{area}_{col_noprefix}_negLRhist',
+                    fig_folder,
+                    PROJ_FOLDER,
+                )
+                
+                
+        return
+    
+    
+    def plot_winbias_hist(self, learning_rate_df, neuron_type_df, suptitle, fig_folder):
+    
+        cols = learning_rate_df.columns
+        areas = AREAS + ['all areas']
+    
+        # Pair positive and negative LR columns by their shared neuron-type suffix.
+        # Expected naming: 'Positive Learning rate for Q...' / 'Negative Learning rate for Q...'
+        pos_cols = {self._strip_sign_prefix(c): c for c in cols if 'Q' in c and c.startswith('Pos')}
+        neg_cols = {self._strip_sign_prefix(c): c for c in cols if 'Q' in c and c.startswith('Neg')}
+        all_suffixes = sorted(set(pos_cols) | set(neg_cols))
+    
+        for i, area in enumerate(areas):
+    
+            area_neuron_type_df = utils.area_parser(neuron_type_df, area)
+            area_learning_rate_df = utils.area_parser(learning_rate_df, area)
+    
+            print(area)
+            if area_learning_rate_df.empty:
+                print('skipped!')
+                continue
+    
+            unique_units = utils.get_unique_units(area_learning_rate_df["Unit"], SUBSESSIONS)
+    
+            for suffix in all_suffixes:
+                pos_col = pos_cols.get(suffix)
+                neg_col = neg_cols.get(suffix)
+                col_noprefix = suffix.removeprefix('Learning Rate for ')
+    
+                
+    
+                pos_vols, pos_stabs = self._collect_pairs(pos_col,unique_units,area_learning_rate_df) if pos_col else ([], [])
+                neg_vols, neg_stabs = self._collect_pairs(neg_col,unique_units,area_learning_rate_df) if neg_col else ([], [])
+    
+                # Skip if neither sign has data.
+                if len(pos_vols)==0 and len(neg_vols)==0:
+                    continue
+                
+                
+                # winbias histogram
+                winbias_vols = np.array(pos_vols) - np.array(neg_vols)
+                winbias_stabs = np.array(pos_stabs) - np.array(neg_stabs)
+                
+                fig,ax = plt.subplots()
+                
+                #hists
+                ax.hist(winbias_vols,label='volatile',bins=20,range=(-1,1),alpha=0.5,color='tab:blue')
+                ax.hist(winbias_stabs,label='stable',bins=20,range=(-1,1),alpha=0.5,color='tab:orange')
+                #mean markers
+                y_max1 = np.max(np.histogram(winbias_vols,bins=20,range=(-1,1))[0])
+                y_max2 = np.max(np.histogram(winbias_stabs,bins=20,range=(-1,1))[0])
+                y_max = np.max([y_max1,y_max2])
+                ax.plot(np.mean(winbias_vols),y_max,marker='v',color='tab:blue')
+                ax.plot(np.mean(winbias_stabs),y_max,marker='v',color='tab:orange')
+                #plot details
+                ax.set_title(f'Win-Bias Histogram - {area}\n{col_noprefix}')
+                ax.set_ylabel('Number of neurons')
+                ax.set_xlabel('Win-Bias\nPos LR - Neg LR')
+                ax.legend()
+
+                fig.suptitle(suptitle)
+                fig.tight_layout()
+                
+                #stats
+                print('-'*25)
+                print('Win-Bias: volatile vs stable')
+                print(suffix)
+                print(area)
+                res = sp.stats.ttest_ind(winbias_stabs, winbias_vols, equal_var=True)
+                print(res)
+    
+                utils.save_svg(
+                    fig,
+                    f'{suptitle}_{area}_{col_noprefix}_winbiashist',
+                    fig_folder,
+                    PROJ_FOLDER,
+                )
+                
+                
+                # change in winbias histogram
+                winbias_change = winbias_vols - winbias_stabs
+                
+                fig,ax = plt.subplots()
+                #histogram
+                ax.hist(winbias_change,label='delta',bins=40,range=(-2,2),alpha=0.5,color='tab:green')
+                #mean marker
+                y_max = np.max(np.histogram(winbias_change,bins=40,range=(-2,2))[0])
+                ax.plot(np.mean(winbias_change),y_max,marker='v',color='tab:green')
+                #plot details
+                ax.set_title(f'Change in Win-Bias Histogram - {area}\n{col_noprefix}')
+                ax.set_ylabel('Number of neurons')
+                ax.set_xlabel('Delta Win-Bias\nVolatile - Stable')
+                ax.legend()
+
+                fig.suptitle(suptitle)
+                fig.tight_layout()
+    
+                utils.save_svg(
+                    fig,
+                    f'{suptitle}_{area}_{col_noprefix}_delwinbiashist',
+                    fig_folder,
+                    PROJ_FOLDER,
+                )
+                
+                
+                # winbias scatter plot
+                fig,ax = plt.subplots()
+                ax.scatter(winbias_vols,winbias_stabs)
+                ax.set_title(f'Win-Bias in volatile vs stable blocks/n{area} - {col_noprefix}')
+                ax.set_ylabel('Win-Bias in Stable Block')
+                ax.set_xlabel('Win-Bias in Volatile Block')
+
+                fig.suptitle(suptitle)
+                fig.tight_layout()
+    
+                utils.save_svg(
+                    fig,
+                    f'{suptitle}_{area}_{col_noprefix}_winbiasscatter',
+                    fig_folder,
+                    PROJ_FOLDER,
+                )    
+                
+                
+        return    
+    
+    
+    
+    def _collect_pairs_with_units(self, lr_col, unique_units, area_learning_rate_df):
+        """Return {unit: (vol, stab)} for units with non-NaN data in both subsessions."""
+        result = {}
+        for unit in unique_units:
+            volatile = utils.get_unit_data(
+                area_learning_rate_df, f'{unit} - {SUBSESSIONS[2]}', lr_col
+            )
+            stable = utils.get_unit_data(
+                area_learning_rate_df, f'{unit} - {SUBSESSIONS[1]}', lr_col
+            )
+            if not np.isnan(volatile) and not np.isnan(stable):
+                result[unit] = (volatile, stable)
+        return result
+
+
+    def plot_learning_rate_scatter_all_combined(self, learning_rate_df, neuron_type_df, suptitle, fig_folder):
+    
+        cols = learning_rate_df.columns
+        areas = AREAS + ['all areas']
+    
+        # Pair positive and negative LR columns by their shared neuron-type suffix.
+        # Expected naming: 'Positive Learning rate for Q...' / 'Negative Learning rate for Q...'
+        pos_cols = {self._strip_sign_prefix(c): c for c in cols if 'Q' in c and c.startswith('Pos')}
+        neg_cols = {self._strip_sign_prefix(c): c for c in cols if 'Q' in c and c.startswith('Neg')}
+        all_suffixes = sorted(set(pos_cols) | set(neg_cols))
+    
+        for i, area in enumerate(areas):
+    
+            area_neuron_type_df = utils.area_parser(neuron_type_df, area)
+            area_learning_rate_df = utils.area_parser(learning_rate_df, area)
+    
+            print(area)
+            if area_learning_rate_df.empty:
+                print('skipped!')
+                continue
+    
+            unique_units = utils.get_unique_units(area_learning_rate_df["Unit"], SUBSESSIONS)
+    
+            for suffix in all_suffixes:
+                pos_col = pos_cols.get(suffix)
+                neg_col = neg_cols.get(suffix)
+                col_noprefix = suffix.removeprefix('Learning Rate for ')
+    
+                pos_data = (self._collect_pairs_with_units(pos_col, unique_units, area_learning_rate_df)
+                            if pos_col else {})
+                neg_data = (self._collect_pairs_with_units(neg_col, unique_units, area_learning_rate_df)
+                            if neg_col else {})
+    
+                if not pos_data and not neg_data:
+                    continue
+    
+                fig, ax = plt.subplots(figsize=(6, 5))
+    
+                color_increase, color_decrease = 'gray', COLORS[i]
+    
+                # Units present in both get a connecting line.
+                shared_units = set(pos_data) & set(neg_data)
+                for unit in shared_units:
+                    pos_vol, pos_stab = pos_data[unit]
+                    neg_vol, neg_stab = neg_data[unit]
+                    ax.plot([pos_vol, neg_vol], [pos_stab, neg_stab],
+                            color='lightgray', linewidth=0.8, zorder=1)
+    
+                # Positive points ('+')
+                for unit, (vol, stab) in pos_data.items():
+                    color = color_increase if stab >= vol else color_decrease
+                    ax.scatter(vol, stab, color=color, marker='+', s=80,
+                               linewidths=1.5, zorder=2)
+    
+                # Negative points ('-')
+                for unit, (vol, stab) in neg_data.items():
+                    color = color_increase if stab >= vol else color_decrease
+                    ax.scatter(vol, stab, color=color, marker='_', s=80,
+                               linewidths=1.5, zorder=2)
+    
+                # Means — same +/- markers as the data, but bigger and bolder so they stand out
+                if pos_data:
+                    pos_vols = [v for v, s in pos_data.values()]
+                    pos_stabs = [s for v, s in pos_data.values()]
+                    ax.scatter(np.mean(pos_vols), np.mean(pos_stabs),
+                               color='k', marker='+', s=400, linewidths=4, zorder=3)
+                if neg_data:
+                    neg_vols = [v for v, s in neg_data.values()]
+                    neg_stabs = [s for v, s in neg_data.values()]
+                    ax.scatter(np.mean(neg_vols), np.mean(neg_stabs),
+                               color='k', marker='_', s=400, linewidths=4, zorder=3)
+    
+                # Diagonal
+                ax.plot([0, 1], [0, 1], '--', linewidth=2, color='k')
+    
+                ax.set_xlim(-0.1, 1.1)
+                ax.set_ylim(-0.1, 1.1)
+                ax.set_ylabel('Stable Blocks Learning Rate', fontsize=12)
+                ax.set_xlabel('Volatile Blocks Learning Rate', fontsize=12)
+    
+                legend_handles = [
+                mpatches.Patch(color=color_increase, label="Increased"),
+                mpatches.Patch(color=color_decrease, label="Decreased"),
+                plt.Line2D([0], [0], color='gray', marker="+", markersize=10,
+                           label="Positive LR", linewidth=0, markeredgewidth=1.5),
+                plt.Line2D([0], [0], color='gray', marker="_", markersize=10,
+                           label="Negative LR", linewidth=0, markeredgewidth=1.5),
+                plt.Line2D([0], [0], color='k', linestyle="--",
+                           label="Diagonal", linewidth=2)
+            ]
+                ax.legend(handles=legend_handles, fontsize=8.5, frameon=False,
+                          loc="upper left", labelcolor="#444")
+    
+                n_pos, n_neg, n_shared = len(pos_data), len(neg_data), len(shared_units)
+                ax.set_title(
+                    f'{area} {col_noprefix} units\n'
+                    f'num units: {n_shared}'
+                )
     
                 fig.suptitle(suptitle)
                 fig.tight_layout()
@@ -3026,7 +3815,7 @@ class Temporal_Analysis:
         fig,ax = plt.subplots()
         for j,regressor in enumerate(REGRESSORS):
             ax.plot(percent_encoding[j,:],color=color,linestyle=LINESTYLES[j],label=regressor)
-        ax.legend(loc='upper center',ncols=len(REGRESSORS))
+        ax.legend(loc='upper center',ncols=int(np.ceil(len(REGRESSORS)/2)))
         ax.set_ylabel('% Units Encoding')
         ylo,yhi,dy = 0,109,10
         ax.set_ylim([ylo,yhi])
@@ -3151,19 +3940,181 @@ def plot_var_corr(corr_matrix,list_of_vars,title):
     fig.suptitle(title)
     fig.tight_layout()
     return fig
+
+
+def plot_behavior_learningrates_dual():
+    
+    assert VALUE_MODEL == 'DualBaseline'
+    # subsessions = ['stable block','volatile block']
+
+    pos_lrs = np.zeros((len(SESSIONS),len(SUBSESSIONS)))
+    neg_lrs = np.zeros((len(SESSIONS),len(SUBSESSIONS)))
+    betas = np.zeros((len(SESSIONS),len(SUBSESSIONS)))
+    for ss,subsession in enumerate(SUBSESSIONS):
+        
+        print('*'*50)
+        print(subsession)
+        print('*'*50)
+                
+        for s,session in enumerate(SESSIONS):
+            start=time.time()
+            Behav = ProcessBehavior(session,subsession)
+            param_dict = Behav.Q_learning_params
+            
+            pos_lrs[s,ss] = param_dict['pos_alpha']
+            neg_lrs[s,ss] = param_dict['neg_alpha']
+            betas[s,ss] = param_dict['beta']
+            
+            utils.get_time_left(start,s,len(SESSIONS))
+
+        
+    fig,axs=plt.subplots(1,3)
+    fig.suptitle(f'All Sessions (n={len(SESSIONS)})')        
+        
+    #pos lr
+    ax=axs[0]
+    ax.set_title('Positive LR')
+    ax.boxplot(pos_lrs,tick_labels=SUBSESSIONS)
+    ax.set_ylim([-0.1,1.1])
+    ax.set_ylabel('Learning Rate')
+    ax.tick_params(axis='x', labelrotation=45)
+    
+    #neg lr
+    ax=axs[1]
+    ax.set_title('Negative LR')
+    ax.boxplot(neg_lrs,tick_labels=SUBSESSIONS)
+    ax.set_ylim([-0.1,1.1])
+    # ax.set_ylabel('Learning Rate')
+    ax.set_yticks([])
+    ax.tick_params(axis='x', labelrotation=45)
+    
+    #beta (inverse temp)
+    ax=axs[2]
+    ax.set_title('Beta (Inverse Temperature)')
+    ax.boxplot(betas,tick_labels=SUBSESSIONS)
+    ax.set_ylim([-0.1,20])
+    ax.set_ylabel('Beta')
+    ax.tick_params(axis='x', labelrotation=45)
+    
+    fig.tight_layout()
+            
+    return
+
+
+def plot_behavior_learningrates_single():
+    
+    assert VALUE_MODEL == 'Baseline'
+    # subsessions = ['stable block','volatile block']
+
+    lrs = np.zeros((len(SESSIONS),len(SUBSESSIONS)))
+    betas = np.zeros((len(SESSIONS),len(SUBSESSIONS)))
+    for ss,subsession in enumerate(SUBSESSIONS):
+        
+        print('*'*50)
+        print(subsession)
+        print('*'*50)
+                
+        for s,session in enumerate(SESSIONS):
+            start=time.time()
+            print(session)
+            Behav = ProcessBehavior(session,subsession)
+            param_dict = Behav.Q_learning_params
+            lrs[s,ss] = param_dict['alpha']
+            betas[s,ss] = param_dict['beta']
+            
+            utils.get_time_left(start,s,len(SESSIONS))
+
+        
+    fig,axs=plt.subplots(1,2)
+    fig.suptitle(f'All Sessions (n={len(SESSIONS)})')        
+        
+    #pos lr
+    ax=axs[0]
+    ax.set_title('Learning Rate')
+    ax.boxplot(lrs,tick_labels=SUBSESSIONS)
+    ax.set_ylim([-0.1,1.1])
+    ax.set_ylabel('Learning Rate')
+    ax.tick_params(axis='x', labelrotation=45)
+    
+    #beta (inverse temp)
+    ax=axs[1]
+    ax.set_title('Beta (Inverse Temperature)')
+    ax.boxplot(betas,tick_labels=SUBSESSIONS)
+    ax.set_ylim([-0.1,20])
+    ax.set_ylabel('Beta')
+    ax.tick_params(axis='x', labelrotation=45)
+    
+    fig.tight_layout()
+            
+    return
+
+
+
+
+def plot_value_dist_unitlevel():
+    
+    subsession = 'all trials'
+    
+    behavior_df_list = []
+    for s,session in enumerate(SESSIONS):
+        start=time.time()
+        print(session)
+        Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session) 
+        
+        #load neuron types and learning rates for this subsession
+        neuron_type_df = utils.load_csv('NeuronTypes',session,DATA_FOLDER)
+        subsession_type_df = neuron_type_df[neuron_type_df['Unit'].str.contains(subsession)]
+        learning_rate_df = utils.load_csv('LearningRates',session,DATA_FOLDER)
+        # subsession_lr_df =  learning_rate_df[learning_rate_df['Unit'].str.contains(subsession)]
+        
+        units = subsession_type_df['Unit'].values
+        unit_types = subsession_type_df['Neuron Type'].values
+        value_types = ['Q1','Q2']
+        
+        
+        for v_type in value_types:
+            print(v_type)
+            for unit,unit_type in zip(units,unit_types):
+                # print(unit)
+                if v_type in unit_type: #only proceed if this unit encodes the current value type
+                 
+                    pos_lr = utils.get_unit_data(learning_rate_df,unit,f'Pos Learning Rate for {v_type}')
+                    neg_lr = utils.get_unit_data(learning_rate_df,unit,f'Neg Learning Rate for {v_type}')
+                
+                    Behav.get_behavior(Q_learning=True, learning_rates=[pos_lr,neg_lr])
+                    df_out = Behav.behavior_df[[v_type,'Stable','Volatile','Rew_prob_1','Rew_prob_2']]
+                    behavior_df_list.append(df_out)
+                    
+        utils.get_time_left(start,s,len(SESSIONS))
+    print('Plotting...')    
+    plot_value_dist(behavior_df_list)    
+    
+    return
+
+
+
+
     
 def plot_value_dist(behavior_df_list,save_flag=False):
     
     combined_df = utils.merge_sessions_df(behavior_df_list)
             
     def get_values_rewprob_volatility(df,stable_or_volatile,rew_prob):
-        Q1 = df['Q1'].loc[(df[stable_or_volatile]==1) & (df['Rew_prob_1']==rew_prob)]
-        Q2 = df['Q2'].loc[(df[stable_or_volatile]==1) & (df['Rew_prob_2']==rew_prob)]
+        if 'Q1' in df.columns:
+            trials = utils.get_trials_rewprob_volatility(df,stable_or_volatile,rew_prob)
+            Q1 = df['Q1'].iloc[trials]
+        else:
+            Q1 = np.full(len(df),np.nan)
+            
+        if 'Q2' in df.columns:
+            trials = utils.get_trials_rewprob_volatility(df,stable_or_volatile,1-rew_prob) #do 1 minus rew prob since this is for targ 2
+            Q2 = df['Q2'].iloc[trials]
+        else:
+            Q2 = np.full(len(df),np.nan)
         
         return np.concatenate([Q1,Q2])
     
     ## Histogram plots
-    
     bins=np.linspace(0.0,1.0,num=20)
     
     # rewprob = 0/1 plot
@@ -3206,70 +4157,134 @@ def plot_value_dist(behavior_df_list,save_flag=False):
     fig.tight_layout()
         
     
+    
     ## Variance Bar plots
-    ylims = 0,0.08
+    vars_df = {'RewProb':[], 'StableOrVolatile':[], 'Variance':[]}
+    ylims = 0,0.1
+    colors = ['darkgray','dimgray']
+    
     # rewprob = 0/1 plot
+    rew_probs = [0.,1.]
     fig,ax=plt.subplots()
+    handles=[]
     for i,stable_or_volatile in enumerate(['Stable','Volatile']):
-        for ii,rew_prob in enumerate([0.,1.]):
+        for ii,rew_prob in enumerate(rew_probs):
             vars_ = []
             for behavior_df in behavior_df_list: #loop thru all sessions individually
                 values = get_values_rewprob_volatility(behavior_df,stable_or_volatile,rew_prob)
-                vars_.append(np.nanvar(values))
+                if len(values)>0:
+                    var = np.nanvar(values)                    
+                    vars_.append(var)
+                    vars_df['RewProb'].append(rew_prob)
+                    vars_df['StableOrVolatile'].append(stable_or_volatile)
+                    vars_df['Variance'].append(var)
+                
             avg,sem = utils.get_avg_sem(vars_,axis=0)
-            print(vars_)
-            print(avg)
-            print(sem)
-            ax.bar(i+(ii*2.5),avg,label=stable_or_volatile,hatch=HATCHSTYLES[i],color=COLORS[ii])
+            # print(vars_)
+            # print(avg)
+            # print(sem)
+            ax.bar(i+(ii*2.5),avg,label=stable_or_volatile,color=colors[i])
             ax.errorbar(i+(ii*2.5),avg,sem,ecolor='k',color='k')
-    ax.legend()
+        patch = mpatches.Patch(color=colors[i], label=stable_or_volatile)
+        handles.append(patch)
+                  
+    ax.legend(handles=handles)
     ax.set_ylabel('Value Distribution Variance')
-    ax.set_xticks([])
-    ax.set_title('Target Reward Probabilities: 0/1')
+    ax.set_xticks([0.5,3.0],[f'Rew Prob: {rew_probs[0]}',f'Rew Prob: {rew_probs[1]}'])
+    ax.set_title(f'Target Reward Probabilities: 0/1\nn={len(vars_)}')
     ax.set_ylim(ylims)
     fig.tight_layout()
             
     # rewprob = 0.2/0.8 plot
+    rew_probs = [0.2,0.8]
     fig,ax=plt.subplots()
+    handles=[]
     for i,stable_or_volatile in enumerate(['Stable','Volatile']):
-        for ii,rew_prob in enumerate([0.2,0.8]):
+        for ii,rew_prob in enumerate(rew_probs):
             vars_ = []
             for behavior_df in behavior_df_list: #loop thru all sessions individually
                 values = get_values_rewprob_volatility(behavior_df,stable_or_volatile,rew_prob)
-                vars_.append(np.nanvar(values))
+                if len(values)>0:
+                    var = np.nanvar(values)                    
+                    vars_.append(var)
+                    vars_df['RewProb'].append(rew_prob)
+                    vars_df['StableOrVolatile'].append(stable_or_volatile)
+                    vars_df['Variance'].append(var)
             avg,sem = utils.get_avg_sem(vars_,axis=0)
-            print(vars_)
-            print(avg)
-            print(sem)
-            ax.bar(i+(ii*2.5),avg,label=stable_or_volatile,hatch=HATCHSTYLES[i],color=COLORS[ii])
+            # print(vars_)
+            # print(avg)
+            # print(sem)
+            ax.bar(i+(ii*2.5),avg,label=stable_or_volatile,color=colors[i])
             ax.errorbar(i+(ii*2.5),avg,sem,ecolor='k',color='k')
-    ax.legend()
+        patch = mpatches.Patch(color=colors[i], label=stable_or_volatile)
+        handles.append(patch)
+    ax.legend(handles=handles)
     ax.set_ylabel('Value Distribution Variance')
-    ax.set_xticks([])
-    ax.set_title('Target Reward Probabilities: 0.2/0.8')
+    ax.set_xticks([0.5,3.0],[f'Rew Prob: {rew_probs[0]}',f'Rew Prob: {rew_probs[1]}'])
+    ax.set_title(f'Target Reward Probabilities: 0.2/0.8\nn={len(vars_)}')
     ax.set_ylim(ylims)
     fig.tight_layout()
     
     # rewprob = 0.4/0.6 plot
+    rew_probs = [0.4,0.6]
     fig,ax=plt.subplots()
+    handles=[]
     for i,stable_or_volatile in enumerate(['Stable','Volatile']):
-        for ii,rew_prob in enumerate([0.4,0.6]):
+        for ii,rew_prob in enumerate(rew_probs):
             vars_ = []
             for behavior_df in behavior_df_list: #loop thru all sessions individually
                 values = get_values_rewprob_volatility(behavior_df,stable_or_volatile,rew_prob)
-                vars_.append(np.nanvar(values))
+                if len(values)>0:
+                    var = np.nanvar(values)                    
+                    vars_.append(var)
+                    vars_df['RewProb'].append(rew_prob)
+                    vars_df['StableOrVolatile'].append(stable_or_volatile)
+                    vars_df['Variance'].append(var)
             avg,sem = utils.get_avg_sem(vars_,axis=0)
-            print(vars_)
-            print(avg)
-            print(sem)
-            ax.bar(i+(ii*2.5),avg,label=stable_or_volatile,hatch=HATCHSTYLES[i],color=COLORS[ii])
+            # print(vars_)
+            # print(avg)
+            # print(sem)
+            ax.bar(i+(ii*2.5),avg,label=stable_or_volatile,color=colors[i])
             ax.errorbar(i+(ii*2.5),avg,sem,ecolor='k',color='k')
-    ax.legend()
+        patch = mpatches.Patch(color=colors[i], label=stable_or_volatile)
+        handles.append(patch)
+    ax.legend(handles=handles)
     ax.set_ylabel('Value Distribution Variance')
-    ax.set_xticks([])
-    ax.set_title('Target Reward Probabilities: 0.4/0.6')
+    ax.set_xticks([0.5,3.0],[f'Rew Prob: {rew_probs[0]}',f'Rew Prob: {rew_probs[1]}'])
+    ax.set_title(f'Target Reward Probabilities: 0.4/0.6\nn={len(vars_)}')
     ax.set_ylim(ylims)
     fig.tight_layout()
+    
+    
+    
+    ## Stats
+    
+    # 2way ANOVAs
+    vars_df = pd.DataFrame.from_dict(vars_df)
+    vars_df['StableOrVolatile'] = vars_df['StableOrVolatile'].astype('category')
+    
+    print('High Value')
+    hv_df = vars_df.loc[vars_df['RewProb'] > 0.5]
+    model = sm_api.ols('Variance ~ C(RewProb) + C(StableOrVolatile) + C(RewProb):C(StableOrVolatile)', data=hv_df).fit()
+    anova_result = sm.stats.anova_lm(model, typ=2)
+    print(anova_result)
+    
+    
+    print('\n\nLow Value')
+    lv_df = vars_df.loc[vars_df['RewProb'] < 0.5]
+    model = sm_api.ols('Variance ~ C(RewProb) + C(StableOrVolatile) + C(RewProb):C(StableOrVolatile)', data=lv_df).fit()
+    anova_result = sm.stats.anova_lm(model, typ=2)
+    print(anova_result)
+    
+    for rew_prob in [0.,0.2,0.4,0.6,0.8,1.]:
+        print(f'\n\nRewProb={rew_prob}  Stable vs Volatile')
+        stab = vars_df['Variance'].loc[(vars_df['RewProb']==rew_prob) & (vars_df['StableOrVolatile']=='Stable')].values
+        vol = vars_df['Variance'].loc[(vars_df['RewProb']==rew_prob) & (vars_df['StableOrVolatile']=='Volatile')].values
+        res = sp.stats.ttest_ind(stab, vol, equal_var=True)
+        print(res)
+    
+    
+    
             
     # df = behavior_df
     # Q1_vol = df['Q1'].loc[df['Volatile']==1]
@@ -3324,6 +4339,25 @@ def filter_learning_rates(learning_rate_df,neuron_type_df):
                     learning_rate_df.loc[i,col] = 'Does not encode' 
                 
     return learning_rate_df    
+
+
+def filter_dict_by_neurontype(dict_to_filter,neuron_type_df,neuron_type,subsession):
+    
+    units = neuron_type_df['Unit'].values
+    idxs = []
+    
+    for i,unit in enumerate(units):
+        current_neuron_type = utils.get_unit_data(neuron_type_df,unit,'Neuron Type')
+        
+        if (neuron_type in "".join(current_neuron_type)) and (subsession in unit):
+            unit_nosubsess = unit.removesuffix(f' - {subsession}')
+            idxs.append(dict_to_filter['unit_labels'].index(unit_nosubsess))
+        
+    filtered_dict = {} 
+    for key,list_ in dict_to_filter.items():
+        filtered_dict[key] = [list_[i] for i in idxs]
+                
+    return filtered_dict
 
 
 #### Plot Methods #######################################################
@@ -3498,6 +4532,63 @@ def plot_trajs_gif(trajs, labels, n_dims):
 
     return 
 
+def barchart_metric_by_rewprob(metric_arr,behavior_df,ax_title,sup_title):
+ 
+    fig,ax=plt.subplots()
+
+    intergroup_spacing = 3
+    intragroup_spacing = 0.8
+    colors = ['black','darkgray','dimgray']
+    handles =[]        
+    for i,stable_or_volatile in enumerate(SUBSESSIONS):
+        # print(stable_or_volatile)
+        
+        for j,rew_prob in enumerate(REW_PROBS):
+            # print(rew_prob)
+            
+            trials = utils.get_trials_rewprob_volatility(behavior_df,stable_or_volatile,rew_prob)
+            # print(trials)
+            assert trials is not None
+            avg,sem = utils.get_avg_sem(metric_arr[trials],axis=0)
+            # print(avg)
+            
+            x = intergroup_spacing * j + intragroup_spacing * i
+            ax.bar(x,avg,color=colors[i])
+            ax.errorbar(x,avg,yerr=sem,ecolor='k')
+            
+        patch = mpatches.Patch(color=colors[i], label=stable_or_volatile)
+        handles.append(patch)    
+        
+    ax.legend(handles=handles,loc='lower left')      
+    start = intragroup_spacing
+    step = intergroup_spacing
+    x_ticks = np.arange(start,start + step*len(REW_PROBS),step=step)
+    ax.set_xticks(x_ticks,REW_PROBS)
+    ax.set_xlabel('Reward Probabilities')
+    
+    
+    ax.set_title(ax_title)
+    fig.suptitle(sup_title)
+    fig.tight_layout()
+    
+    
+    return
+
+
+def sliding_win_vs_trials(metric_arr,behavior_df,ax_title,sup_title,num_trials_slide):
+        
+    block_borders = utils.get_block_borders(behavior_df)
+    slide_avg = utils.trial_sliding_avg(metric_arr, num_trials_slide)
+    
+    fig,ax=plt.subplots()
+    ax.plot(slide_avg)
+    ymin,ymax = ax.get_ylim()
+    ax.vlines(block_borders,ymin,ymax,color='k',linestyle='dashed')
+    ax.set_title(ax_title)
+    fig.suptitle(sup_title)
+    fig.tight_layout()
+    
+    return
 
 
 
@@ -3752,44 +4843,109 @@ def run_value_distribution():
 
 def run_cumulative_units():
     
-    fig,axs = plt.subplots(1,3)
+    def get_avg_fr(spike_times):
+        return len(spike_times)/(spike_times[-1]-spike_times[0])
+    
+    fig1,axs1 = plt.subplots(1,len(AREAS)) #cumu units
+    fig2,ax2 = plt.subplots() #units per session
+    fig3,axs3 = plt.subplots(1,len(AREAS)) #fr hist
     for a,area in enumerate(AREAS):
         print('\n'*3,area)
-        sorted_list = []
-        sorted_counter = 0
-        incl_list = []
-        incl_counter = 0
+        unit_cumu_list = []
+        unit_counter = 0
+        unit_perday_list = []
+        avg_fr_list = []
+        avg_value_fr_list = []
+        value_unit_cumu_list = []
+        value_unit_counter = 0
+        
         
         for s,session in enumerate(SESSIONS):
             
-            sorted_dict= utils.load_pkl_2('goodunits_spike_times_dict',session,DATA_FOLDER)
-            n_sorted_units = utils.count_units_area(sorted_dict,area)
-            sorted_counter += n_sorted_units
-            sorted_list.append(sorted_counter)
+            print(f'num units: {unit_counter}')
+            print(f'num value units: {value_unit_counter}')
             
-            included_sorted_dict = utils.load_pkl_2('goodunits_spike_times_dict_goodunits_spike_times_dict',session,DATA_FOLDER)
-            n_included_units = utils.count_units_area(included_sorted_dict,area)
-            incl_counter += n_included_units
-            incl_list.append(incl_counter)
+            unit_dict= utils.load_pkl_2('goodunits_spike_times_dict',session,DATA_FOLDER)
             
-        # fig,ax = plt.subplots()
-        ax=axs[a]
-        ax.plot(sorted_list,color=COLORS[a],linestyle='-',label='sorted')
-        ax.plot(incl_list,color=COLORS[a],linestyle='--',label='inlcuded')
+            # cumulative num of units
+            n_units = utils.count_units_area(unit_dict,area)
+            unit_counter += n_units
+            unit_cumu_list.append(unit_counter)
+            unit_perday_list.append(n_units)
+            
+            
+            # FRs of units
+            if n_units > 0:
+                area_dict = utils.area_parser(unit_dict,area)
+                for unit in range(n_units):
+                    avg_unit_fr = get_avg_fr(area_dict['spike_times'][unit])
+                    avg_fr_list.append(avg_unit_fr)
+            
+                # num of value units
+                neuron_type_df = utils.area_parser(utils.load_csv('NeuronTypes',session,DATA_FOLDER),area)
+                filt_dict = filter_dict_by_neurontype(area_dict,neuron_type_df,'Q','all trials')
+                n_value_units = utils.count_units_area(filt_dict,area)
+                value_unit_counter += n_value_units
+                
+                # FRs of value units
+                if n_value_units > 0:
+                    for unit in range(n_value_units):
+                        avg_unit_fr = get_avg_fr(filt_dict['spike_times'][unit])
+                        avg_value_fr_list.append(avg_unit_fr)
+                    
+                    # print(area_dict['unit_labels'])
+                    # print('-'*20)
+                    # print(filt_dict['unit_labels'])
+                    #compare to neuron type df excel file
+                    # xxx
+  
+            value_unit_cumu_list.append(value_unit_counter)
+            
+            
+        # Cumulative
+        ax=axs1[a]
+        ax.plot(unit_cumu_list,color=COLORS[a],linestyle='-',label='all units')
+        ax.plot(value_unit_cumu_list,color='green',linestyle='-',label='value units')
         ax.set_title(f'{area}')
         if a==0:
-            ax.set_ylabel(f'Number of units')
+            ax.set_ylabel('Cumulative number of units')
         else:
             ax.set_yticks([])
         ax.set_xlabel('Recording session')
         ax.legend(loc='upper left')
         
-    ymax = max([ax.get_ylim()[1] for ax in axs])
-    axs[0].set_ylim([0,ymax])
-    axs[1].set_ylim([0,ymax])
-    axs[2].set_ylim([0,ymax])
-    fig.suptitle('Cumulative Recorded Units')
-    fig.tight_layout()
+        # Per session
+        ax=ax2
+        ax.plot(unit_perday_list,color=COLORS[a],linestyle='-',label=f'{area}')
+        ax.set_ylabel('Number of units per session')
+        ax.set_xlabel('Recording session')
+        ax.legend(loc='upper left')
+        
+        # FR hist
+        ax=axs3[a]
+        ax.hist(avg_fr_list,range=(0,5),bins=10,color=COLORS[a],label='all units')
+        ax.hist(avg_value_fr_list,range=(0,5),bins=10,color='green',label='value units')
+        ax.set_title(f'{area}')
+        if a==0:
+            ax.set_ylabel('Number of units')
+        else:
+            ax.set_yticks([])
+        ax.set_xlabel('Avg FR')
+        ax.legend()
+        
+        
+        
+    ymax = max([ax.get_ylim()[1] for ax in axs1])
+    for a in range(len(AREAS)):
+        axs1[a].set_ylim([0,ymax])
+    fig1.suptitle('Cumulative Recorded Units')
+    fig1.tight_layout()
+    
+    fig2.suptitle('Recorded Units Per Session')
+    fig2.tight_layout()
+    
+    fig3.suptitle('Avg FR Histograms')
+    fig3.tight_layout()
         
     return
 
@@ -3801,7 +4957,7 @@ def units_by_session():
     o=[]
     for s,session in enumerate(SESSIONS):
         
-        included_sorted_dict = utils.load_pkl_2('goodunits_spike_times_dict_goodunits_spike_times_dict',session,DATA_FOLDER)
+        included_sorted_dict = utils.load_pkl_2('goodunits_spike_times_dict',session,DATA_FOLDER)
         v.append(utils.count_units_area(included_sorted_dict,'vmPFC'))
         c.append(utils.count_units_area(included_sorted_dict,'Cd'))
         o.append(utils.count_units_area(included_sorted_dict,'OFC'))
@@ -3811,40 +4967,6 @@ def units_by_session():
 
 
 
-
-# def run_cumulative_units_2():
-    
-#     fig,ax = plt.subplots()
-#     for a,area in enumerate(AREAS):
-#         print('\n'*3,area)
-#         sorted_list = []
-#         sorted_counter = 0
-#         incl_list = []
-#         incl_counter = 0
-        
-#         for s,session in enumerate(SESSIONS):
-            
-#             sorted_dict= utils.load_pkl_2('goodunits_spike_times_dict',session,DATA_FOLDER)
-#             n_sorted_units = utils.count_units_area(sorted_dict,area)
-#             sorted_counter += n_sorted_units
-#             sorted_list.append(sorted_counter)
-            
-#             included_sorted_dict = utils.load_pkl_2('goodunits_spike_times_dict_goodunits_spike_times_dict',session,DATA_FOLDER)
-#             n_included_units = utils.count_units_area(included_sorted_dict,area)
-#             incl_counter += n_included_units
-#             incl_list.append(incl_counter)
-            
-#         # fig,ax = plt.subplots()
-#         ax.plot(sorted_list,color=COLORS[a],linestyle='-',label=f'{area} sorted')
-#         ax.plot(incl_list,color=COLORS[a],linestyle='--',label=f'{area} included')
-#     ax.set_title(f'Cumulative Recorded Units')
-#     ax.set_ylabel(f'Number of units')
-#     ax.set_xlabel('Recording session')
-#     ax.legend()
-#     # fig.suptitle('Cumulative Recorded Units')
-#     fig.tight_layout()
-        
-#     return
 
 #### Works in Progress #######################################################
 # def get_LFP_bandpowers(): #to compute and save out bandpwoers so i don't have to rerun later
@@ -3883,23 +5005,200 @@ def run_lasso():
     return neuron_type_df
 
 
+def behavior_checks():
+    
+    print('BEHAVIOR CHECKS')
+    
+    all_trials=[]
+    unique_trials=[]
+    completed_trials=[]
+    pct_rewarded=[]
+    side_bias=[]
+    rights=[]
+    lefts=[]
+    for s,session in enumerate(SESSIONS):
+        
+        print(f'{session}: {s+1}/{len(SESSIONS)}')
+        #add in for subsession here
+        
+        
+        #load hdf
+        Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+        be = BehaviorAnalysis.ChoiceBehavior_Whitehall([Behav.hdf_file]) #method needs hdf filenames in a list
+        
+        #get info about trials
+        all_ = len(be.ind_center_states)
+        unique = len(be.ind_wait_states)
+        completed = len(be.ind_check_reward_states)
+        hold_pen = len(be.ind_hold_penalty_states)
+        timeout = len(be.ind_timeout_penalty_states)
+        rewarded = len(be.ind_reward_states)
+        pct_rew = rewarded/completed
+        side = Behav.behavior_df['Side'] # -1 or 1
+        bias = np.mean(side)
+        right = sum(np.nonzero(side==-1)[0])
+        left = sum(np.nonzero(side==1)[0])
+        assert right + left == len(side)
+        
+        assert abs(completed + hold_pen + timeout - all_) < 2 #making sure number of total trials add up (can be off by 1 since task can end abruptly)
+        
+        all_trials.append(all_)
+        unique_trials.append(unique)
+        completed_trials.append(completed)
+        pct_rewarded.append(pct_rew)
+        side_bias.append(bias)
+        rights.append(right)
+        lefts.append(left)
+        print(f'All trials: {all_}')
+        print(f'Unique trials: {unique}')
+        print(f'Completed trials: {completed}')
+        print(f'Percent completed trials rewarded: {pct_rew}')
+        print(f'Side bias: {bias}')
+        
+        print('-'*30)
+        
+    # summarize info across sessions using histograms
+    fig,axs = plt.subplots(2,2)
+    axs[0,0].hist(all_trials,color='tab:blue')
+    axs[0,0].set_title('Num Trials')
+    
+    # axs[1,0].hist(side_bias,color='tab:orange')
+    # axs[1,0].set_title('Side Bias')
+    axs[1,0].scatter(lefts,rights,color='tab:orange')
+    axs[1,0].set_xlabel('left choices')
+    axs[1,0].set_ylabel('right choices')
+    axs[1,0].set_title('Left/Right Choices')
+    
+    axs[0,1].hist(completed_trials,color='tab:green')
+    axs[0,1].set_title('Num Completed Trials')
+    
+    axs[1,1].hist(pct_rewarded,color='tab:red')
+    axs[1,1].set_title('Pct Trials Rewarded')
+    
+    
+
+    fig.suptitle('Behavior Checks - Histograms over all sessions')
+    fig.tight_layout()        
+        
+
+def behavior_checks_2():
+    
+    behavior_df_list=[]
+    for s,session in enumerate(SESSIONS):
+        
+        start = time.time()
+        print(session)
+        
+        Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+        
+        
+        #get Rxn time
+        be = BehaviorAnalysis.ChoiceBehavior_Whitehall([Behav.hdf_file])
+        target_prompt = be.ind_check_reward_states - 3
+        hold_begin = be.ind_check_reward_states - 2
+        RT = (be.state_time[hold_begin] - be.state_time[target_prompt]) / be.fs_hdf * 1000 #millisec
+        
+        #get side info
+        side = np.array(Behav.behavior_df['Side']) # -1 or 1
+        
+        # get acc info
+        acc=[]
+        for trial in range(len(Behav.behavior_df)):
+            if Behav.behavior_df['Choice1'].iloc[trial] == 1: #if choice 1
+                if Behav.behavior_df['Rew_prob_1'].iloc[trial] > Behav.behavior_df['Rew_prob_2'].iloc[trial]: #if choice 1 actually more valuable
+                    acc.append(1)
+                else:
+                    acc.append(0)
+                    
+            else: #if choice 2
+                if Behav.behavior_df['Rew_prob_2'].iloc[trial] > Behav.behavior_df['Rew_prob_1'].iloc[trial]: #if choice 2 actually more valuable
+                    acc.append(1)
+                else:
+                    acc.append(0)
+        
+        Behav.behavior_df['Rxn Time'] = RT
+        behavior_df_list.append(Behav.behavior_df)
+        
+        # ## Per session plots
+        # #bar charts
+        # for metric_arr,metric in zip([side,np.array(acc),RT],['Side bias','Accuracy','Rxn Time']):
+        #     print(metric)
+        #     barchart_metric_by_rewprob(metric_arr,Behav.behavior_df,ax_title=metric,sup_title=session)
+            
+        # #sliding avg plots
+        # for metric_arr,metric in zip([side,acc],['Side bias','Accuracy']):
+        #     sliding_win_vs_trials(metric_arr,Behav.behavior_df,ax_title=metric,sup_title=session,num_trials_slide=10)
+        
+        # #rxn time vs trials plot
+        # sliding_win_vs_trials(RT,Behav.behavior_df,ax_title='Rxn Time (ms)',sup_title=session,num_trials_slide=1)
+        
+        
+        # fig,ax = plt.subplots()
+        # ax.hist(RT,bins=50)
+        # ax.set_xlabel('Rxn time (ms)')
+        # ax.set_title('Rxn Time')
+        # fig.suptitle(session)
+        # fig.tight_layout()
+        # xxx
+        
+        utils.get_time_left(start,s,len(SESSIONS)) 
+        
+    
+    
+    #all sessions combined
+    combined_df = utils.merge_sessions_df(behavior_df_list)
+    
+    #get side info
+    side = combined_df['Side'] # -1 or 1
+    
+    # get acc info
+    acc=[]
+    for trial in range(len(combined_df)):
+        if combined_df['Choice1'].iloc[trial] == 1: #if choice 1
+            if combined_df['Rew_prob_1'].iloc[trial] > combined_df['Rew_prob_2'].iloc[trial]: #if choice 1 actually more valuable
+                acc.append(1)
+            else:
+                acc.append(0)
+                
+        else: #if choice 2
+            if combined_df['Rew_prob_2'].iloc[trial] > combined_df['Rew_prob_1'].iloc[trial]: #if choice 2 actually more valuable
+                acc.append(1)
+            else:
+                acc.append(0)
+    
+    # get rxn time
+    RT = combined_df['Rxn Time']
+    
+    #bar charts
+    for metric_arr,metric in zip([side,np.array(acc),RT],['Side bias','Accuracy','Rxn Time']):
+        barchart_metric_by_rewprob(metric_arr,combined_df,ax_title=metric,sup_title='All Sessions')
+        
+    return
+    
+
 def plot_behavior():
     df_list =[]
-    corr_list=[]
-    aics_list=[]
-    kurt_vol_list=[]
-    kurt_stab_list=[]
+    # corr_list=[]
+    # aics_list=[]
+    # kurt_vol_list=[]
+    # kurt_stab_list=[]
     for s,session in enumerate(SESSIONS):
         
         #choose which sessions to do
-        # if session == 'airp20251111_02_te2250':
+        # if session == 'braz20260803_03_te2548':
         if 1:
             
-            Behav = ProcessBehavior(session)
-            # Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            # Behav = ProcessBehavior(session)
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
             
             # Behav.check_all_behavior()
             # Behav.plot_choices_and_rewards(save_flag=False)
+            # Behav.plot_values(save_flag=False)
+            # Behav.plot_choices(save_flag=False)
+            # Behav.plot_values_vs_choices_vs_rewprob(num_targs=1,num_trials_to_plot=60,save_flag=False)
+            # Behav.plot_values_vs_rewards(num_targs=1,num_trials_to_plot=60,save_flag=False)
+            # Behav.plot_values_vs_choices_vs_rewprob(num_targs=2,num_trials_to_plot=60,save_flag=False)
+            # Behav.plot_values_vs_rewards(num_targs=2,num_trials_to_plot=60,save_flag=False)
             
             ##see which q learning model fits the best
             # vmc = ValueModelingClass()
@@ -3917,7 +5216,7 @@ def plot_behavior():
             
             ##analyze distribution of values
             # Behav.plot_values(save_flag=False)
-            # kurt_vol, kurt_stab = Behav.plot_value_dist(save_flag=False)
+            # Behav.plot_value_dist(save_flag=False) #good for exemplar plots
             # kurt_vol_list.append(kurt_vol)
             # kurt_stab_list.append(kurt_stab)
             # xxx
@@ -3989,61 +5288,76 @@ def plot_behavior():
 
 #### Load Data
 
-def load_data(overwrite_spikes_flag=False,overwrite_lfp_flag=False):
+def load_data(overwrite_spikes_flag=False,overwrite_lfp_flag=False,verbose=False):
     
-    
+    counter = 0
     sp_list=[]
     be_list=[]
     lfp_list=[]
     for s,session in enumerate(SESSIONS):
         
         start = time.time()
+        print(session)
         
         ## Spikes
-        if utils.does_pkl_exist('Spikes', session,DATA_FOLDER) and not overwrite_spikes_flag:  
-            Spikes = utils.load_pkl('Spikes', session,DATA_FOLDER)
-            
-            #Check that params are the same 
-            if (Spikes.alignment == ALIGNMENT) and np.all(Spikes.psth_t_vector == T_VECTOR):
-                sp_list.append(Spikes)
-            else: #if params are new, overwrite
-                del Spikes
-                Spikes = ProcessSpikes(session, verbose=False)
+        if LOAD_SPIKES:
+            if utils.does_pkl_exist('Spikes', session,DATA_FOLDER) and not overwrite_spikes_flag:  
+                Spikes = utils.load_pkl('Spikes', session,DATA_FOLDER)
+                
+                #Check that params are the same 
+                if (Spikes.alignment == ALIGNMENT) and np.all(Spikes.psth_t_vector == T_VECTOR):
+                    sp_list.append(Spikes)
+                else: #if params are new, overwrite
+                    del Spikes
+                    Spikes = ProcessSpikes(session, verbose)
+                    utils.save_pkl(Spikes, 'Spikes', session,DATA_FOLDER)
+                    sp_list.append(Spikes)
+                    
+            else: #if pkl doesnt exist
+                Spikes = ProcessSpikes(session, verbose)
                 utils.save_pkl(Spikes, 'Spikes', session,DATA_FOLDER)
                 sp_list.append(Spikes)
-                
-        else: #if pkl doesnt exist
-            Spikes = ProcessSpikes(session, verbose=False)
-            utils.save_pkl(Spikes, 'Spikes', session,DATA_FOLDER)
-            sp_list.append(Spikes)
+        else:
+            sp_list.append('')
             
             
         ## Behavior
-        Behav = ProcessBehavior(session)
-        be_list.append(Behav)
+        if LOAD_BEHAV:
+            Behav = ProcessBehavior(session,'all trials')
+            assert np.all(np.isclose(np.unique(Behav.behavior_df['Rew_prob_1']),REW_PROBS)), f'Not all rew probs present! {session} {np.unique(Behav.behavior_df['Rew_prob_1'])}'
+            # if Behav.num_trials > 1080: 
+            #     counter +=1
+            #     # print(f'Too few trials! {session}')
+            # print(Behav.num_trials)
+            be_list.append(Behav)
+        else: 
+            be_list.append('')
         
         
         ## LFP
-        if utils.does_pkl_exist('LFP', session,DATA_FOLDER) and not overwrite_lfp_flag:  
-            LFP = utils.load_pkl('LFP', session,DATA_FOLDER)
-            
-            #Check that params are the same 
-            if (LFP.alignment == ALIGNMENT) and np.all(LFP.t_vector == T_VECTOR):
-                lfp_list.append(LFP)
-            else: #if params are new, overwrite
-                del LFP
-                LFP = ProcessLFP(session, verbose=False)
+        if LOAD_LFP:
+            if utils.does_pkl_exist('LFP', session,DATA_FOLDER) and not overwrite_lfp_flag:  
+                LFP = utils.load_pkl('LFP', session,DATA_FOLDER)
+                
+                #Check that params are the same 
+                if (LFP.alignment == ALIGNMENT) and np.all(LFP.t_vector == T_VECTOR):
+                    lfp_list.append(LFP)
+                else: #if params are new, overwrite
+                    del LFP
+                    LFP = ProcessLFP(session, verbose)
+                    utils.save_pkl(LFP, 'LFP', session,DATA_FOLDER)
+                    lfp_list.append(LFP)
+                    
+            else: #if pkl doesnt exist
+                LFP = ProcessLFP(session, verbose)
                 utils.save_pkl(LFP, 'LFP', session,DATA_FOLDER)
                 lfp_list.append(LFP)
-                
-        else: #if pkl doesnt exist
-            LFP = ProcessLFP(session, verbose=False)
-            utils.save_pkl(LFP, 'LFP', session,DATA_FOLDER)
-            lfp_list.append(LFP)
-        # lfp_list.append('')
+        else:
+            lfp_list.append('')
         
-        utils.get_time_left(start,s,len(SESSIONS))
-    assert len(sp_list) == len(be_list) == len(lfp_list) == len(SESSIONS)    
+        utils.get_time_left(start,s,len(SESSIONS)) 
+    # print(counter)
+    # xxx
     return sp_list,be_list,lfp_list
 
 
@@ -4067,8 +5381,10 @@ def get_Spikes_Behav_LFP(s: int, session: str):
 #%% Run!
 
 # SESSIONS = ["airp20251021_02_te2216"] #low units- test sesison
-
-SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrite_lfp_flag=False)
+LOAD_LFP = False
+LOAD_SPIKES = True
+LOAD_BEHAV = True
+SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrite_lfp_flag=False,verbose=True)
 
 
 # lasso_param_gridsearch(lasso_or_ridge='ridge')
@@ -4077,9 +5393,21 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 
 # run_cumulative_units()
 
-# NT = NeuronType_Analysis(overwrite_flag=True)
-# regression_rsqr_table()
-# LR = LearningRate_Analysis(overwrite_flag=False)
+# plot_behavior()
+
+# plot_value_dist_unitlevel()
+
+# behavior_checks()
+behavior_checks_2()
+
+# VALUE_MODEL = 'Baseline'
+# plot_behavior_learningrates_single()
+# VALUE_MODEL = 'DualBaseline'
+# plot_behavior_learningrates_dual()
+
+# NT = NeuronType_Analysis(overwrite_flag=False)
+#regression_rsqr_table()
+LR = LearningRate_Analysis(overwrite_flag=False)
 
 # TemporalAnalysis = Temporal_Analysis()
 # sessions = ["airp20251007_02_te2198","airp20250602_03_te2003","airp20260408_03_te2343"] #found by using units_by_session() and argmax
@@ -4088,6 +5416,10 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # TemporalAnalysis.run_LFP_vs_PCA(sessions,areas)
 # TemporalAnalysis.run_spikes()
 # TemporalAnalysis.run_LFP()
+
+# sessions = ["airp20260708_05_te2496","airp20260625_05_te2453","airp20260624_06_te2448"]
+# areas = ['OFC','OFC','OFC']
+# TemporalAnalysis.run_PCA(sessions,areas)
 
 # ENCODING_WINDOWs = [(0.0,0.2),(0.0,0.4),(0.0,0.6)] #window over which neuron encoding is determined [s]
 # for ENCODING_WINDOW in ENCODING_WINDOWs:
@@ -4099,3 +5431,9 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 
 # if __name__ == "__main__":
 #     run_temporal_encodings_LFP()
+
+# if __name__ == "__main__":
+#    LR = LearningRate_Analysis(overwrite_flag=True)
+
+# if __name__ == "__main__":
+#    plot_behavior()

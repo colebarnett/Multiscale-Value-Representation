@@ -108,7 +108,7 @@ class ChoiceBehavior_Whitehall():
             if i == 0:
                 self.state = table.root.task_msgs[:]['msg']
                 self.state_time = table.root.task_msgs[:]['time']
-#                 self.trial_type = table.root.task[:]['target_index']
+                self.trial_type = table.root.task[:]['target_index']
                 self.targetL = table.root.task[:]['targetL']
                 self.targetH = table.root.task[:]['targetH']
 #                 self.hdfs = [table]
@@ -124,19 +124,22 @@ class ChoiceBehavior_Whitehall():
             else:
                 self.state = np.append(self.state, table.root.task_msgs[:]['msg'])
                 self.state_time = np.append(self.state_time, self.state_time[-1] + table.root.task_msgs[:]['time'])
-                # self.trial_type = np.append(self.trial_type, table.root.task[:]['target_index'])
+                self.trial_type = np.append(self.trial_type, table.root.task[:]['target_index'])
                 self.targetL = np.vstack([self.targetL, table.root.task[:]['targetL']])
                 self.targetH = np.vstack([self.targetH, table.root.task[:]['targetH']])
 #                 self.hdfs.append(table)
                 
         self.ind_wait_states = np.ravel(np.nonzero(self.state == b'wait'))   # total number of unique trials
-        self.ind_center_states = np.ravel(np.nonzero(self.state == b'center'))   # total number of totals (includes repeats if trial was incomplete)
+        self.ind_center_states = np.ravel(np.nonzero(self.state == b'center'))   # total number of trials (includes repeats if trial was incomplete)
         self.ind_hold_center_states = np.ravel(np.nonzero(self.state == b'hold_center'))
         self.ind_hold_center_stimulate_states = np.ravel(np.nonzero(self.state == b'hold_center_and_stimulate'))
         self.ind_target_states = np.ravel(np.nonzero(self.state == b'target'))
         self.ind_hold_targetL_states = np.ravel(np.nonzero(self.state == b'hold_targetL'))
         self.ind_hold_targetH_states = np.ravel(np.nonzero(self.state == b'hold_targetH'))
-        self.ind_check_reward_states = np.ravel(np.nonzero(self.state == b'check_reward'))
+        self.ind_check_reward_states = np.ravel(np.nonzero(self.state == b'check_reward')) # total number of completed (successful) trials
+        self.ind_reward_states = np.ravel(np.nonzero(self.state == b'reward'))
+        self.ind_hold_penalty_states = np.ravel(np.nonzero(self.state == b'hold_penalty'))
+        self.ind_timeout_penalty_states = np.ravel(np.nonzero(self.state == b'timeout_penalty'))
         
         self.reward_scheduleH = table.root.task[:]['reward_scheduleH'][self.state_time[self.ind_check_reward_states]]
         self.reward_scheduleL = table.root.task[:]['reward_scheduleL'][self.state_time[self.ind_check_reward_states]]
@@ -145,9 +148,12 @@ class ChoiceBehavior_Whitehall():
         
         self.num_trials = self.ind_center_states.size
         self.num_successful_trials = self.ind_check_reward_states.size
+        self.num_unsuccessful_trials = self.ind_hold_penalty_states.size + self.ind_timeout_penalty_states.size
 #         self.num_trials_A = num_trials_A
 #         self.num_trials_B = num_trials_B
         #self.table=table
+        
+        table.close()
 
 
     def GetChoicesAndRewards(self):
@@ -168,11 +174,11 @@ class ChoiceBehavior_Whitehall():
         ind_holds = self.ind_check_reward_states - 2
         ind_rewards = self.ind_check_reward_states + 1
         rewards = np.array([float(st==b'reward') for st in self.state[ind_rewards]])
-#         instructed_or_freechoice = np.ravel(self.trial_type[self.state_time[self.ind_check_reward_states]])  # = 1: instructed, =2: free-choice
+        instructed_or_freechoice = np.ravel(self.trial_type[self.state_time[self.ind_check_reward_states]])  # = 1: instructed, =2: free-choice
         chosen_target = np.array([(int(self.state[ind]==b'hold_targetH') + 1) for ind in ind_holds])
 
         
-        return chosen_target, rewards #, instructed_or_freechoice
+        return chosen_target, rewards, instructed_or_freechoice
 
 
 #     def ChoicesAfterStimulation(self):
@@ -223,7 +229,7 @@ class ChoiceBehavior_Whitehall():
             successful reach trial. 0 or 1.
 
         '''
-        choices, _  = self.GetChoicesAndRewards()
+        choices, _ , _  = self.GetChoicesAndRewards()
 
         # Get target side information
         ind_targets = self.ind_check_reward_states - 3
@@ -364,6 +370,9 @@ class ChoiceBehavior_Whitehall():
         #stable first = 6bl*100tr + 48bl*20tr
         #vol first = 24bl*20tr + 12bl*100tr
         
+        def round_to_base(number, base): #to catch rounding errors and round to closest multiple of 0.2
+            return base * round(number / base)
+        
         rew_probs = np.zeros(self.num_successful_trials)
         if is_stable_block[0] == 1: #stable block first
             n_block_1 = 6
@@ -393,11 +402,15 @@ class ChoiceBehavior_Whitehall():
             if edge_2 > self.num_successful_trials: #dont make upper edge past num of trials
                 edge_2 = self.num_successful_trials
             
-            rew_prob = np.round(np.mean(self.reward_scheduleH[edge_1:edge_2]),decimals=2) #avg rew sched to get empirical rew prob
+            rew_prob = round_to_base(np.mean(self.reward_scheduleH[edge_1:edge_2]),0.2) #avg rew sched to get empirical rew prob
             rew_probs[edge_1:edge_2] = np.full(edge_2-edge_1,rew_prob) #fill into var which gets saved out
         
         rew_probs_H = rew_probs
         rew_probs_L = 1 - rew_probs_H
+        
+        if np.any(np.isnan(rew_probs_H)):
+            print(self.filename, 'NAN FOUND WHILE FINDING BLOCK REW PROBS')
+            
         return rew_probs_H, rew_probs_L
         
 

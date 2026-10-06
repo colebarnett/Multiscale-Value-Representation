@@ -50,6 +50,34 @@ def get_avg_sem(arr,axis):
     sem = np.nanstd(arr,axis=axis) / np.sqrt(np.shape(arr)[axis])
     return avg,sem
 
+def trial_sliding_avg(trial_array, num_trials_slide):
+    '''
+    This method performs a simple sliding average of trial_array using a window
+    of length num_trials_slide.
+    '''
+    num_trials = len(trial_array)
+    slide_avg = np.zeros(num_trials)
+    for i in range(num_trials):
+        if i < num_trials_slide:
+            slide_avg[i] = np.sum(trial_array[:i+1])/float(i+1)
+        else:
+            slide_avg[i] = np.sum(trial_array[i-num_trials_slide+1:i+1])/float(num_trials_slide)
+    return slide_avg
+
+def get_block_borders(behavior_df):
+    borders = np.nonzero(np.diff(behavior_df['Rew_prob_1']))[0]
+    return borders
+
+def get_trials_rewprob_volatility(df,stable_or_volatile,rew_prob): 
+    if stable_or_volatile == 'all trials':
+        return list(df.loc[(np.isclose(df['Rew_prob_1'],rew_prob))].index)
+    elif stable_or_volatile == 'stable block':
+        return list(df.loc[(df['Stable']==1) & (np.isclose(df['Rew_prob_1'],rew_prob))].index)
+    elif stable_or_volatile == 'volatile block':
+        return list(df.loc[(df['Volatile']==1) & (np.isclose(df['Rew_prob_1'],rew_prob))].index)
+    else:
+        raise ValueError("Invalid value for stable_or_volatile")
+
 def linear_encoding_regression(spikes,behavior):
     '''
     Parameters
@@ -195,18 +223,38 @@ def simple_regression_best_rsqr(regressor_list,spikes,behavior_df):
 def area_parser(df_or_dict,brain_area):
     
     if type(df_or_dict) == dict:
+        
+        if 'unit_labels' in df_or_dict.keys():
+
+            match brain_area:
+                case 'vmPFC':
+                    idxs = [idx for idx,label in enumerate(df_or_dict['unit_labels']) if 'Unit A' in label]
+                case 'Cd':
+                    idxs = [idx for idx,label in enumerate(df_or_dict['unit_labels']) if 'Unit C' in label]
+                case 'OFC':
+                    idxs = [idx for idx,label in enumerate(df_or_dict['unit_labels']) if 'Unit D' in label]
+                case 'all areas':
+                    idxs = [idx for idx,label in enumerate(df_or_dict['unit_labels']) if 'Unit' in label]
+                case _:
+                    raise ValueError('Invalid brain area')
+            
+            subset_df_or_dict = {} 
+            for key,list_ in df_or_dict.items():
+                subset_df_or_dict[key] = [list_[i] for i in idxs]
                     
-        match brain_area:
-            case 'vmPFC':
-                subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit A' in k}
-            case 'Cd':
-                subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit C' in k}
-            case 'OFC':
-                subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit D' in k}
-            case 'all areas':
-                subset_df_or_dict = df_or_dict
-            case _:
-                raise ValueError('Invalid brain area')
+        else:
+            
+            match brain_area:
+                case 'vmPFC':
+                    subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit A' in k}
+                case 'Cd':
+                    subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit C' in k}
+                case 'OFC':
+                    subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit D' in k}
+                case 'all areas':
+                    subset_df_or_dict = df_or_dict
+                case _:
+                    raise ValueError('Invalid brain area')
         
                 
     if type(df_or_dict)==pd.DataFrame:
@@ -370,3 +418,6 @@ def load_pkl_2(obj_name,session,data_folder):
 
 def does_pkl_exist(obj_name,session,data_folder):
     return os.path.exists(os.path.join(data_folder,session,f'{session}_{obj_name}.pkl'))
+    
+def does_csv_exist(df_name,session,data_folder):
+    return os.path.exists(os.path.join(data_folder,session,f'{session}_{df_name}_df.csv'))

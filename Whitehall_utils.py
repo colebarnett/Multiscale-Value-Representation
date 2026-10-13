@@ -112,11 +112,24 @@ def linear_encoding_regression(spikes,behavior):
 def linear_encoding_regression_feature_selection(regressor_list,spikes,behavior_df,alpha_thresh):
     res = linear_encoding_regression(spikes,behavior_df[regressor_list])
     
+    # ## take all regressors with signif p value
+    # pvals = res.pvalues[1:] #exclude constant (position 0)
+    # if res.f_pvalue < alpha_thresh:
+    #     signif_regressors = str([str(feat) for feat in np.array(regressor_list)[pvals < alpha_thresh]])
+    #     if len(signif_regressors) < 1:
+    #         signif_regressors = 'none'
+    # else:
+    #     signif_regressors = 'none'
+        
+    ## take regressor with greatest beta coeff
+    betas = abs(res.params[1:]) #exclude constant (position 0)
     pvals = res.pvalues[1:] #exclude constant (position 0)
-    
     if res.f_pvalue < alpha_thresh:
-        signif_regressors = str([str(feat) for feat in np.array(regressor_list)[pvals < alpha_thresh]])
-        if len(signif_regressors) < 1:
+        best_regressor = str(np.array(regressor_list)[np.argmax(betas)])
+        
+        if np.array(pvals)[np.argmax(betas)] < alpha_thresh:
+            signif_regressors = best_regressor
+        else:
             signif_regressors = 'none'
     else:
         signif_regressors = 'none'

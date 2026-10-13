@@ -260,6 +260,43 @@ def get_area_info(session):
             session_areas = ['Cd','OFC']
         case 'braz20260824_03_te2584':
             session_areas = ['Cd','OFC']
+            
+        case 'braz20260827_03_te2587':
+            session_areas = ['Cd','OFC']
+        case 'braz20260828_03_te2590':
+            session_areas = ['Cd','OFC']
+        case 'braz20260901_03_te2593':
+            session_areas = ['Cd','OFC']
+        case 'braz20260902_03_te2596':
+            session_areas = ['Cd','OFC']
+        case 'braz20260908_03_te2599':
+            session_areas = ['Cd','OFC']
+        case 'braz20260909_03_te2602':
+            session_areas = ['Cd','OFC']
+        case 'braz20260910_03_te2605':
+            session_areas = ['Cd','OFC']
+        case 'braz20260911_03_te2608':
+            session_areas = ['Cd','OFC']
+        case 'braz20260915_05_te2613':
+            session_areas = ['Cd','OFC']
+        case 'braz20260916_03_te2616':
+            session_areas = ['Cd','OFC']
+        case 'braz20260918_03_te2619':
+            session_areas = ['Cd','OFC']
+        case 'braz20260924_03_te2622':
+            session_areas = ['Cd','OFC']
+        case 'braz20260925_03_te2625':
+            session_areas = ['Cd','OFC']
+        case 'braz20261001_03_te2628':
+            session_areas = ['Cd','OFC']
+        case 'braz20261002_05_te2633':
+            session_areas = ['Cd','OFC']
+        case 'braz20261007_03_te2636':
+            session_areas = ['Cd','OFC']
+        case 'braz20261008_03_te2639':
+            session_areas = ['Cd','OFC']
+        case 'braz20261009_03_te2642':
+            session_areas = ['Cd','OFC']
         case _:
             raise ValueError(f"No info about chs for {session} !")
             

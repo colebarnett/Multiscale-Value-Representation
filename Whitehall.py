@@ -315,6 +315,10 @@ LEARNING_RATES = np.linspace(start=0.05,stop=0.95,num=19) #used for dual learnin
 
 ALPHA_THRESHOLD = 0.05
 
+USE_SLIDE = False
+FR_INCLUSION_NUM_TRIALS_SLIDE_WINDOW = 20 #num trials for sliding average for spike min FR inclusion criteria
+MIN_FR_THRESH = 1 #Hz
+
 COLORS = ['red','blue','gold','green','orange','purple']
 LINESTYLES = ['-','--',':','-.',(0, (3, 10, 1, 10)), (0, (3, 5, 1, 5, 1, 5)), (0, (1, 10))]
 MARKERSTYLES = ['o','^','s','*','d','P','X','p','H','<','>']
@@ -366,9 +370,10 @@ class ProcessSpikes:
         self.get_times_align()
         
         ## Get Firing Rates and PSTHs
-        self.fr_df = None
-        self.psth_dict = None
-        self.psth_df = None
+        self.fr_df = None #zscored
+        self.psth_dict = None #zscored
+        self.psth_df = None #zscored
+        self.excluded_units = []
         self.psth_t_vector = T_VECTOR
         self.alignment = ALIGNMENT
         self.get_psth()
@@ -473,7 +478,34 @@ class ProcessSpikes:
                 print(f'{self.unit_labels[i]} - Avg FR: {len(unit_spikes)/(unit_spikes[-1]-unit_spikes[0]):.2f} Hz. ({i+1}/{len(self.unit_labels)})')
         
         return
+    
+
+    def apply_inclusion_criteria(self, psth):
+                
+        win = (T_VECTOR>=ENCODING_WINDOW[0]) * (T_VECTOR<=ENCODING_WINDOW[1]) #to get num_spikes only over defined window
+        fr = np.mean(psth[:,win],axis=1) #len = num_trials
+        sliding_avg = utils.trial_sliding_avg(fr, FR_INCLUSION_NUM_TRIALS_SLIDE_WINDOW)
         
+        if self.verbose:
+            print(f'Hold avg FR: {np.mean(fr):.2f} Hz')
+        
+        #sliding avg FR
+        if USE_SLIDE:
+            if np.all(sliding_avg >= MIN_FR_THRESH):
+                return True
+            else:
+                return False
+        
+        # overall avg FR of holds
+        if not USE_SLIDE:
+            if np.mean(fr)>=MIN_FR_THRESH:
+                return True
+            else:
+                return False
+        
+        
+        return
+    
     def get_times_align(self):
         '''
         Gets the array of indices (sample numbers) corresponding to the hold_center, 
@@ -623,13 +655,30 @@ class ProcessSpikes:
             
             unit_spikes = np.array(self.spike_times[unit])
             psth = self.compute_psth(unit_spikes) #psth = (num_trials x num_timepoints)
-            self.psth_dict[unit_label] = sp.stats.zscore(psth,axis=0)
-            psth_df_dict[unit_label] = np.ravel(sp.stats.zscore(psth,axis=0))
-            fr_df_dict[unit_label] = sp.stats.zscore(np.mean(psth[:,win],axis=1)) # shape = 1 x n_trials
             
-            assert fr_df_dict[unit_label].shape[0] == self.num_trials
+            #see if unit passes inclusion criteria
+            if self.verbose:
+                print(unit_label)
+                print(f'Overall avg FR: {len(unit_spikes)/(unit_spikes[-1]-unit_spikes[0]):.2f} Hz')
+            include_unit_flag = self.apply_inclusion_criteria(psth)
             
-                
+            #only include current unit if it passed inclusion criteria
+            if include_unit_flag:
+                self.psth_dict[unit_label] = sp.stats.zscore(psth,axis=0)
+                psth_df_dict[unit_label] = np.ravel(sp.stats.zscore(psth,axis=0))
+                fr_df_dict[unit_label] = sp.stats.zscore(np.mean(psth[:,win],axis=1)) # shape = 1 x n_trials
+                assert fr_df_dict[unit_label].shape[0] == self.num_trials
+            else:
+                self.excluded_units.append(unit_label)
+            
+        
+            
+        if self.verbose:
+            print('Units excluded:')
+            print(self.excluded_units)
+            print('-'*20)
+            
+        print(f'{len(self.excluded_units)}/{self.num_units} units excluded.')
         print('Done making PSTHs!')
         
         # self.psth_dict: keys=unit_labels, values=psth arrays (trials x timepoints)
@@ -2096,7 +2145,7 @@ class LearningRate_Analysis:
                     neuron_type = utils.get_unit_data(neuron_type_df,unit,'Neuron Type')
                     if REGRESSORS[j] in neuron_type:
                     
-                        if not np.all(np.isnan(regression_weights_df[REGRESSORS[j]])): #to catch if all regression weights are nan
+                        if not np.any(np.isnan(regression_weights_df[REGRESSORS[j]])): #to catch if any regression weights are nan
                             # idx of max regression weight for current regressor
                             idx_max_regressor = regression_weights_df[REGRESSORS[j]].idxmax()
                             
@@ -3371,46 +3420,59 @@ class NeuronType_Analysis:
          utils.save_svg(fig,f'Value-Choice-Other_{suptitle}',fig_folder,PROJ_FOLDER)
          
          
-         # relative choice (R) vs target choice (T)
-         Rt = sum( contains('Choice_high') * no_contains('Choice1') )
-         rT = sum( no_contains('Choice_high') * contains('Choice1') )
-         RT = sum( contains('Choice_high') * contains('Choice1') )
-         fig,ax = plot_venn2(Rt,rT,RT, 'Relative Choice','Target Choice')
-         fig.suptitle(suptitle)
-         utils.save_svg(fig,f'RelChoice-TargChoice_{suptitle}',fig_folder,PROJ_FOLDER)
+         # # relative choice (R) vs target choice (T)
+         # Rt = sum( contains('Choice_high') * no_contains('Choice1') )
+         # rT = sum( no_contains('Choice_high') * contains('Choice1') )
+         # RT = sum( contains('Choice_high') * contains('Choice1') )
+         # fig,ax = plot_venn2(Rt,rT,RT, 'Relative Choice','Target Choice')
+         # fig.suptitle(suptitle)
+         # utils.save_svg(fig,f'RelChoice-TargChoice_{suptitle}',fig_folder,PROJ_FOLDER)
          
-         # Qdiff_ (D) vs Q1 (I)
-         Di = sum( contains('Qdiff_') *   no_contains('Q1') )
-         dI = sum( no_contains('Qdiff_') *contains('Q1') )
-         DI = sum( contains('Qdiff_') *   contains('Q1') )
-         fig,ax = plot_venn2(Di,dI,DI, 'Qdiff','Q1')
-         fig.suptitle(suptitle)
-         utils.save_svg(fig,f'Qdiff-Q1_{suptitle}',fig_folder,PROJ_FOLDER)
+         # # Qdiff_ (D) vs Q1 (I)
+         # Di = sum( contains('Qdiff_') *   no_contains('Q1') )
+         # dI = sum( no_contains('Qdiff_') *contains('Q1') )
+         # DI = sum( contains('Qdiff_') *   contains('Q1') )
+         # fig,ax = plot_venn2(Di,dI,DI, 'Qdiff','Q1')
+         # fig.suptitle(suptitle)
+         # utils.save_svg(fig,f'Qdiff-Q1_{suptitle}',fig_folder,PROJ_FOLDER)
          
-         # Qhigh (H) vs |Qdiff| (A) vs Qchosen (C)
-         Hac = sum( contains('Qhigh') *       no_contains('absQdiff') * no_contains('Qchosen') )
-         hAc = sum( no_contains('Qhigh') *    contains('absQdiff') *    no_contains('Qchosen') )
-         HAc = sum( contains('Qhigh') *       contains('absQdiff') *    no_contains('Qchosen') )
-         haC = sum( no_contains('Qhigh') *    no_contains('absQdiff') * contains('Qchosen') )
-         HaC = sum( contains('Qhigh') *       no_contains('absQdiff') * contains('Qchosen') )
-         hAC = sum( no_contains('Qhigh') *    contains('absQdiff') *    contains('Qchosen') )
-         HAC = sum( contains('Qhigh') *       contains('absQdiff') *    contains('Qchosen') )
-         fig,ax = plot_venn3(Hac,hAc,HAc,haC,HaC,hAC,HAC, 'Qhigh','|Qdiff|','Qchosen')
+         # # Qhigh (H) vs |Qdiff| (A) vs Qchosen (C)
+         # Hac = sum( contains('Qhigh') *       no_contains('absQdiff') * no_contains('Qchosen') )
+         # hAc = sum( no_contains('Qhigh') *    contains('absQdiff') *    no_contains('Qchosen') )
+         # HAc = sum( contains('Qhigh') *       contains('absQdiff') *    no_contains('Qchosen') )
+         # haC = sum( no_contains('Qhigh') *    no_contains('absQdiff') * contains('Qchosen') )
+         # HaC = sum( contains('Qhigh') *       no_contains('absQdiff') * contains('Qchosen') )
+         # hAC = sum( no_contains('Qhigh') *    contains('absQdiff') *    contains('Qchosen') )
+         # HAC = sum( contains('Qhigh') *       contains('absQdiff') *    contains('Qchosen') )
+         # fig,ax = plot_venn3(Hac,hAc,HAc,haC,HaC,hAC,HAC, 'Qhigh','|Qdiff|','Qchosen')
+         # fig.suptitle(suptitle)
+         # utils.save_svg(fig,f'Qhigh-absQdiff-Qchosen_{suptitle}',fig_folder,PROJ_FOLDER)
+
+         # Q1 (H) vs Q2 (A) vs Qchosen (C)
+         Hac = sum( contains('Q1') *       no_contains('Q2') * no_contains('Qchosen') )
+         hAc = sum( no_contains('Q1') *    contains('Q2') *    no_contains('Qchosen') )
+         HAc = sum( contains('Q1') *       contains('Q2') *    no_contains('Qchosen') )
+         haC = sum( no_contains('Q1') *    no_contains('Q2') * contains('Qchosen') )
+         HaC = sum( contains('Q1') *       no_contains('Q2') * contains('Qchosen') )
+         hAC = sum( no_contains('Q1') *    contains('Q2') *    contains('Qchosen') )
+         HAC = sum( contains('Q1') *       contains('Q2') *    contains('Qchosen') )
+         fig,ax = plot_venn3(Hac,hAc,HAc,haC,HaC,hAC,HAC, 'Q1','Q2','Qchosen')
          fig.suptitle(suptitle)
-         utils.save_svg(fig,f'Qhigh-absQdiff-Qchosen_{suptitle}',fig_folder,PROJ_FOLDER)
+         utils.save_svg(fig,f'Q1-Q2-Qchosen_{suptitle}',fig_folder,PROJ_FOLDER)
+
          
-         # Qdiff_/Q1 (N) vs Qhigh/Qchosen/|Qdiff| (M)
-         Nm = sum( (contains('Qdiff_') +  contains('Q1')) * \
-                 (no_contains('Qhigh') * no_contains('Qchosen') * no_contains('absQdiff')) )
+         # # Qdiff_/Q1 (N) vs Qhigh/Qchosen/|Qdiff| (M)
+         # Nm = sum( (contains('Qdiff_') +  contains('Q1')) * \
+         #         (no_contains('Qhigh') * no_contains('Qchosen') * no_contains('absQdiff')) )
                  
-         nM = sum( (no_contains('Qdiff_') *  no_contains('Q1')) * \
-                 (contains('Qhigh') + contains('Qchosen') + contains('absQdiff')) )
+         # nM = sum( (no_contains('Qdiff_') *  no_contains('Q1')) * \
+         #         (contains('Qhigh') + contains('Qchosen') + contains('absQdiff')) )
                  
-         NM = sum( (contains('Qdiff_') +  contains('Q1')) * \
-                 (contains('Qhigh') + contains('Qchosen') + contains('absQdiff')) )
-         fig,ax = plot_venn2(Nm,nM,NM, 'Qdiff/Q1','Qhigh/Qchosen/|Qdiff|')
-         fig.suptitle(suptitle)
-         utils.save_svg(fig,f'Q1-Qhigh_{suptitle}',fig_folder,PROJ_FOLDER)
+         # NM = sum( (contains('Qdiff_') +  contains('Q1')) * \
+         #         (contains('Qhigh') + contains('Qchosen') + contains('absQdiff')) )
+         # fig,ax = plot_venn2(Nm,nM,NM, 'Qdiff/Q1','Qhigh/Qchosen/|Qdiff|')
+         # fig.suptitle(suptitle)
+         # utils.save_svg(fig,f'Q1-Qhigh_{suptitle}',fig_folder,PROJ_FOLDER)
          
          
          # Bar chart of all regressors 
@@ -3428,7 +3490,6 @@ class NeuronType_Analysis:
          utils.save_svg(fig, f'RegBarChart_{suptitle}', fig_folder,PROJ_FOLDER)
          
          return  
-
 
 
 class Temporal_Analysis:
@@ -4320,6 +4381,68 @@ def plot_value_dist(behavior_df_list,save_flag=False):
     return #kurt_vol, kurt_stab
 
 
+def plot_tuning_curves(fr_df,behavior_df,neuron_type_df,learning_rate_df):
+    assert len(fr_df) == len(behavior_df)
+    num_trials = len(fr_df)
+    
+    units = list(fr_df.keys())
+    
+    if len(units) < 1:
+        return None #skip whole thing if there aren't any units for this session
+    
+    for i,unit in enumerate(units): #loop thru all units of session
+    
+        neuron_type = str(utils.get_unit_data(neuron_type_df,unit+' - all trials','Neuron Type'))
+        print(unit)
+        print(neuron_type)
+        
+        if 'Q' not in neuron_type: #only do for value neurons
+            continue
+        
+        if 'Unit A' in unit: #exclude vmPFC
+            continue
+        
+        #get trials relevant to neuron type
+        if neuron_type == 'Qchosen':
+            trials = list(range(num_trials))
+        elif neuron_type == 'Q1':
+            trials = list(behavior_df.loc[(behavior_df['Choice1']==1)].index)
+        elif neuron_type == 'Q2':
+            trials = list(behavior_df.loc[(behavior_df['Choice2']==1)].index)
+         
+        #catch edge case problems since we are dealing with t+1
+        if trials[-1] >= num_trials-1:
+            trials = trials[:-1]
+
+        #get rpe of trials where he chose the relevant target and the change in fr on the very next trial
+        delta_fr = np.diff(fr_df[unit])[trials] #delta_fr = fr(t+1) - fr(t). Note fr is during the hold center (valuation) period
+        rpe = behavior_df['RPE'][trials] #rpe(t) = r(t) - Q(t)
+        
+        #color by optimism (aka winbias)
+        pos_lr = utils.get_unit_data(learning_rate_df,unit+ ' - all trials',f'Pos Learning Rate for {neuron_type}')
+        neg_lr = utils.get_unit_data(learning_rate_df,unit+ ' - all trials',f'Neg Learning Rate for {neuron_type}')
+        optimism = pos_lr - neg_lr #ranges from -1 to +1
+        if optimism > 0.33: #optimistic is blue
+            color = 'blue'
+        elif optimism < -0.33: #pessimistic is red
+            color = 'red'
+        else:
+            color = 'gray' #neutral is grey
+        
+        #plotit
+        fig,ax = plt.subplots()
+        ax.scatter(rpe,delta_fr,color=color)
+        ax.set_title('Optimism tuning curve')
+        ax.set_ylabel('Delta FR')
+        ax.set_xlabel('RPE')
+        fig.suptitle(f'{unit}\n{neuron_type} encoding unit')
+        fig.tight_layout()
+        plt.show()
+    
+    
+    return
+
+
 
 def filter_learning_rates(learning_rate_df,neuron_type_df):
     
@@ -4950,6 +5073,28 @@ def run_cumulative_units():
     return
 
 
+
+def run_tuning_curves():
+    
+    for s,session in enumerate(SESSIONS):
+        
+        start = time.time()
+        
+        print(session)
+        
+        
+        Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+        neuron_type_df = utils.load_csv('NeuronTypes',session,DATA_FOLDER)
+        learning_rate_df = utils.load_csv('LearningRates',session,DATA_FOLDER)
+        
+        print('data loaded')
+        
+        plot_tuning_curves(Spikes.fr_df,Behav.behavior_df,neuron_type_df,learning_rate_df)
+        
+        utils.get_time_left(start,s,len(SESSIONS))
+        
+    return
+
 def units_by_session():
     
     v=[]
@@ -5175,7 +5320,13 @@ def behavior_checks_2():
         
     return
     
-
+def spike_inclusion_sanity():
+    
+    session = "braz20260911_03_te2608"
+    Spikes = ProcessSpikes(session,True)
+    
+    return
+    
 def plot_behavior():
     df_list =[]
     # corr_list=[]
@@ -5384,7 +5535,7 @@ def get_Spikes_Behav_LFP(s: int, session: str):
 LOAD_LFP = False
 LOAD_SPIKES = True
 LOAD_BEHAV = True
-SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrite_lfp_flag=False,verbose=True)
+SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=True,overwrite_lfp_flag=False,verbose=False)
 
 
 # lasso_param_gridsearch(lasso_or_ridge='ridge')
@@ -5398,16 +5549,18 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # plot_value_dist_unitlevel()
 
 # behavior_checks()
-behavior_checks_2()
+# behavior_checks_2()
+
+run_tuning_curves()
 
 # VALUE_MODEL = 'Baseline'
 # plot_behavior_learningrates_single()
 # VALUE_MODEL = 'DualBaseline'
 # plot_behavior_learningrates_dual()
 
-# NT = NeuronType_Analysis(overwrite_flag=False)
+# NT = NeuronType_Analysis(overwrite_flag=True)
 #regression_rsqr_table()
-LR = LearningRate_Analysis(overwrite_flag=False)
+# LR = LearningRate_Analysis(overwrite_flag=False)
 
 # TemporalAnalysis = Temporal_Analysis()
 # sessions = ["airp20251007_02_te2198","airp20250602_03_te2003","airp20260408_03_te2343"] #found by using units_by_session() and argmax
@@ -5437,3 +5590,5 @@ LR = LearningRate_Analysis(overwrite_flag=False)
 
 # if __name__ == "__main__":
 #    plot_behavior()
+
+

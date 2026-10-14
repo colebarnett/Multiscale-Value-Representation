@@ -354,6 +354,8 @@ def get_unique_units(unit_list,SUBSESSIONS):
     return np.unique(np.array(unit_list))
 
 def get_unit_data(df,unit,heading):
+    assert unit in df['Unit'].values, f'unit {unit} not found! missing subsession?'
+    assert heading in df.columns, f'df heading {heading} not found!'
     desired_row = df[df['Unit']==unit]
     if len(desired_row)>0:
         desired_value = desired_row[heading].values[0]

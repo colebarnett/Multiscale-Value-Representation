@@ -434,6 +434,7 @@ class ValueModelingClass:
         prob_choice_high = results[3]
         accuracy = results[4]
         log_likelihood = results[5]  # Total log-likelihood across all blocks
+        params = results[6]
         
         # Create output dictionary
         value_dict = {
@@ -449,6 +450,7 @@ class ValueModelingClass:
             'method': method,
             'log_likelihood': log_likelihood,
             'accuracy': accuracy,
+            'params': params,
         }
         
         

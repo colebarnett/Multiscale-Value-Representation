@@ -47,6 +47,8 @@ from TwoStageQLearning_KernelAdaptive import Calc_DistrQlearning_2Targs_KernelAd
 from TwoStageQLearning_KernelAdaptiveDecay import Calc_DistrQlearning_2Targs_KernelAdaptiveDecay
 from TwoStageQLearning_DualBaseline import Calc_DistrQlearning_2Targs_DualBaseline
 from TwoStageQLearning_DualBaselineDecay import Calc_DistrQlearning_2Targs_DualBaselineDecay
+from TwoStageQLearning_BaselineSide import Calc_DistrQlearning_2Targs_BaselineSide
+from TwoStageQLearning_DualBaselineSide import Calc_DistrQlearning_2Targs_DualBaselineSide
 
 from TwoStageQLearning_Baseline import loglikelihood_DistrQlearning_2Targs_Baseline
 from TwoStageQLearning_BaselineDecay import loglikelihood_DistrQlearning_2Targs_BaselineDecay
@@ -66,6 +68,8 @@ from TwoStageQLearning_KernelAdaptive import loglikelihood_DistrQlearning_2Targs
 from TwoStageQLearning_KernelAdaptiveDecay import loglikelihood_DistrQlearning_2Targs_KernelAdaptiveDecay
 from TwoStageQLearning_DualBaseline import loglikelihood_DistrQlearning_2Targs_DualBaseline
 from TwoStageQLearning_DualBaselineDecay import loglikelihood_DistrQlearning_2Targs_DualBaselineDecay
+from TwoStageQLearning_BaselineSide import loglikelihood_DistrQlearning_2Targs_BaselineSide
+from TwoStageQLearning_DualBaselineSide import loglikelihood_DistrQlearning_2Targs_DualBaselineSide
 
 class ValueModelingClass:
     """
@@ -98,6 +102,8 @@ class ValueModelingClass:
             'KernelAdaptiveDecay': Calc_DistrQlearning_2Targs_KernelAdaptiveDecay,
             'DualBaseline': Calc_DistrQlearning_2Targs_DualBaseline,
             'DualBaselineDecay': Calc_DistrQlearning_2Targs_DualBaselineDecay,
+            'BaselineSide': Calc_DistrQlearning_2Targs_BaselineSide,
+            'DualBaselineSide': Calc_DistrQlearning_2Targs_DualBaselineSide,
         }
         
         # Dictionary mapping model log likelihood names to their functions
@@ -120,7 +126,12 @@ class ValueModelingClass:
             'KernelAdaptiveDecay': loglikelihood_DistrQlearning_2Targs_KernelAdaptiveDecay,
             'DualBaseline': loglikelihood_DistrQlearning_2Targs_DualBaseline,
             'DualBaselineDecay': loglikelihood_DistrQlearning_2Targs_DualBaselineDecay,
+            'BaselineSide': loglikelihood_DistrQlearning_2Targs_BaselineSide,
+            'DualBaselineSide': loglikelihood_DistrQlearning_2Targs_DualBaselineSide,
         }
+        
+        # Models whose functions take targetH_side (1 = left, 0 = right) as a trailing argument
+        self.side_models = ['BaselineSide', 'DualBaselineSide']
         
         # Model display properties for plotting
         self.model_properties = {
@@ -142,6 +153,8 @@ class ValueModelingClass:
             'KernelAdaptiveDecay': {'color': 'tan', 'linestyle': '--', 'name': 'Kernel+Adaptive+Decay'},
             'DualBaseline': {'color': 'navy', 'linestyle': ':', 'name': 'Dual Baseline'},
             'DualBaselineDecay': {'color': 'skyblue', 'linestyle': ':', 'name': 'Dual Baseline+Decay'},
+            'BaselineSide': {'color': 'black', 'linestyle': '-.', 'name': 'Baseline+Side'},
+            'DualBaselineSide': {'color': 'dimgray', 'linestyle': '-.', 'name': 'Dual Baseline+Side'},
         }
         
         # # Parameter counts for AIC calculation (two-stage models have params for Block A and A')
@@ -186,6 +199,8 @@ class ValueModelingClass:
             'KernelAdaptiveDecay': ['alpha', 'decay', 'ck_weight', 'ck_decay', 'beta'],
             'DualBaseline': ['pos_alpha','neg_alpha','beta'],
             'DualBaselineDecay': ['pos_alpha','neg_alpha','decay','beta'],
+            'BaselineSide': ['alpha','beta','kappa'],
+            'DualBaselineSide': ['pos_alpha','neg_alpha','beta','kappa'],
         }
         
         # Short Description of each model
@@ -208,23 +223,33 @@ class ValueModelingClass:
             'KernelAdaptiveDecay': "Adaptive + Decay, No Lapse",
             'DualBaseline': "Asymmetric learning: pos_alpha (wins) ≠ neg_alpha (losses)",
             'DualBaselineDecay': "Asymmetric learning + forgetting",
+            'BaselineSide': "Standard Q-learning + side bias: logit P(H) = β×ΔQ + κ×side (κ>0 = rightward)",
+            'DualBaselineSide': "Asymmetric learning + side bias: logit P(H) = β×ΔQ + κ×side (κ>0 = rightward)",
         }
         
         # Superset of all parameters and initial values used by all models 
-        self.master_params_list = ['pos_alpha', 'neg_alpha', 'alpha', 'decay', 'ck_weight', 'ck_decay', 'beta', 'rho']
-        self.master_x0 =          [   0.5,         0.5,        0.5,    0.95,       0.0,        0.5,       3.0,     0.0 ]
-        self.master_bounds =      [  (0,1),       (0,1),      (0,1),  (0.9,1),   (-2,2),      (0,1),   (0.1,50), (-2,2)]
+        self.master_params_list = ['pos_alpha', 'neg_alpha', 'alpha', 'decay', 'ck_weight', 'ck_decay', 'beta', 'rho',   'kappa']
+        self.master_x0 =          [   0.5,         0.5,        0.5,    0.95,       0.0,        0.5,       3.0,     0.0,     0.0  ]
+        self.master_bounds =      [  (0,1),       (0,1),      (0,1),  (0.9,1),   (-2,2),      (0,1),   (0.1,50), (-2,2), (-10,10)]
         
         # Superset of all parameters which will get saved out when the model finishes running
         self.all_model_params_A = {'pos_alpha':None, 'neg_alpha':None, 'alpha':None, 
                               'decay':None, 'ck_weight':None, 'ck_decay':None, 
-                              'beta':None, 'rho':None}
+                              'beta':None, 'rho':None, 'kappa':None}
         self.all_model_params_Ap = {'pos_alpha':None, 'neg_alpha':None, 'alpha':None, 
                               'decay':None, 'ck_weight':None, 'ck_decay':None, 
-                              'beta':None, 'rho':None}
+                              'beta':None, 'rho':None, 'kappa':None}
 
     
-    def DistrQlearning_2Targs_TwoStage(self, method, chosen_target, rewards, instructed_or_freechoice, num_trials_A, num_trials_B):
+    def DistrQlearning_2Targs_TwoStage(self, method, chosen_target, rewards, instructed_or_freechoice, num_trials_A, num_trials_B, targetH_side=None):
+        
+        # Side-bias models take targetH_side as one extra trailing argument; all others take nothing extra
+        if method in self.side_models:
+            assert targetH_side is not None, f'{method} needs targetH_side'
+            assert num_trials_A==0 and num_trials_B==0, f'{method} is only set up for single-block (Whitehall) fits'
+            side_args = (targetH_side,)
+        else:
+            side_args = ()
         
         model_func = self.model_functions[method] # calculator function
         model_ll_func = self.model_ll_functions[method] #log likelihood function
@@ -308,13 +333,13 @@ class ValueModelingClass:
             bounds = [self.master_bounds[self.master_params_list.index(model_func_params[i])] for i in range(len(model_func_params))]
             
             result = op.minimize(nll, x0, 
-                                   args=(Q_initial, chosen_target, rewards, instructed_or_freechoice),
+                                   args=(Q_initial, chosen_target, rewards, instructed_or_freechoice, *side_args),
                                    bounds=bounds, method='Nelder-Mead')
             
             # [print(f"{model_func_params[i]}: {result['x'][i]:.4f}") for i in range(len(x0))]
             
             Q_low, Q_high, prob_choice_low, prob_choice_high, accuracy, log_prob_total = \
-                model_func(result["x"], Q_initial, chosen_target, rewards, instructed_or_freechoice)
+                model_func(result["x"], Q_initial, chosen_target, rewards, instructed_or_freechoice, *side_args)
 
             result_A = dict()
             result_Ap = dict()
@@ -398,10 +423,13 @@ class ValueModelingClass:
                 f"No trials extracted from HDF file!"
             )
         
+        # Side of targetH at target onset (1 = left, 0 = right), only needed by side-bias models
+        targetH_side = behavior.targetH[behavior.state_time[behavior.ind_check_reward_states - 3]][:,2]
+        
         # Run the Q-learning model
         # model_func = self.model_functions[method]
         results = self.DistrQlearning_2Targs_TwoStage(method, chosen_target, rewards, instructed_or_freechoice, 
-                           num_trials_A, num_trials_B)
+                           num_trials_A, num_trials_B, targetH_side)
         
         # Unpack results (format varies slightly by model)
         Q_low = results[0]

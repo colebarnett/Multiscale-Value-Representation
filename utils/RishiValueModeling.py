@@ -26,7 +26,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import optimize as op
-from DecisionMakingBehavior_Whitehall import ChoiceBehavior_Whitehall
+from DecisionMakingBehavior import ChoiceBehavior_TwoTargets_Stimulation
 
 # Import all Q-learning model variants
 from TwoStageQLearning_Baseline import Calc_DistrQlearning_2Targs_Baseline
@@ -322,10 +322,10 @@ class ValueModelingClass:
         ##Only fit using one block (for different task structure)##
         elif num_trials_A==0 and num_trials_B==0:
             
-            # print("\n" + "="*60)
-            # print(f"MODEL: {method} ({self.model_descriptions[method]})")
-            # print("Fitting All Trials")
-            # print("="*60)
+            print("\n" + "="*60)
+            print(f"MODEL: {method} ({self.model_descriptions[method]})")
+            print("Fitting All Trials")
+            print("="*60)
             
             Q_initial = 0.5 * np.ones(2)
             nll = lambda *args: -model_ll_func(*args)
@@ -336,7 +336,7 @@ class ValueModelingClass:
                                    args=(Q_initial, chosen_target, rewards, instructed_or_freechoice, *side_args),
                                    bounds=bounds, method='Nelder-Mead')
             
-            # [print(f"{model_func_params[i]}: {result['x'][i]:.4f}") for i in range(len(x0))]
+            [print(f"{model_func_params[i]}: {result['x'][i]:.4f}") for i in range(len(x0))]
             
             Q_low, Q_high, prob_choice_low, prob_choice_high, accuracy, log_prob_total = \
                 model_func(result["x"], Q_initial, chosen_target, rewards, instructed_or_freechoice, *side_args)
@@ -357,18 +357,15 @@ class ValueModelingClass:
              self.all_model_params_A, self.all_model_params_Ap)
     
     
-    def get_values(self, chosen_target, rewards, instructed_or_freechoice, num_trials_A, num_trials_B, method='PersSingle'):
+    def get_values(self, hdf_file, num_trials_A, num_trials_B, method='PersSingle'):
         """
-        Extract Q-values from behavior using specified Q-learning model.
+        Extract Q-values from HDF file using specified Q-learning model.
         
         Parameters:
         -----------
-        chosen_target : arr
-            Behavioral choice data
-        rewards: arr
-            Behavioral rewards data
-        instructed_or_freechoice: arr
-            Data on whether each trial was instructed or was free choice
+        hdf_file : str or list of str
+            Path to HDF file(s). Can be a single file or list of files for sessions
+            split across multiple files.
         num_trials_A : int
             Number of trials in Block A (baseline block)
         num_trials_B : int
@@ -398,24 +395,23 @@ class ValueModelingClass:
             - 'rewards': numpy array of rewards received (0 or 1)
             - 'num_trials_A': number of Block A trials
             - 'num_trials_B': number of Block B trials
-            - 'params' : fit model parameters
         """
         
         # Validate method
         if method not in self.model_functions:
             raise ValueError(f"Unknown method '{method}'. Available methods: {list(self.model_functions.keys())}")
         
-        # # Convert single file to list for consistency
-        # if isinstance(hdf_file, str):
-        #     hdf_files = [hdf_file]
-        # else:
-        #     hdf_files = hdf_file
+        # Convert single file to list for consistency
+        if isinstance(hdf_file, str):
+            hdf_files = [hdf_file]
+        else:
+            hdf_files = hdf_file
         
-        # # Load behavioral data from HDF file(s)
-        # behavior = ChoiceBehavior_Whitehall(hdf_files)
+        # Load behavioral data from HDF file(s)
+        behavior = ChoiceBehavior_TwoTargets_Stimulation(hdf_files, num_trials_A, num_trials_B)
         
-        # # Extract choices, rewards, and trial types
-        # chosen_target, rewards, instructed_or_freechoice = behavior.GetChoicesAndRewards()
+        # Extract choices, rewards, and trial types
+        chosen_target, rewards, instructed_or_freechoice = behavior.GetChoicesAndRewards()
         
         # Check if we got any trials
         if len(chosen_target) == 0:
@@ -438,7 +434,6 @@ class ValueModelingClass:
         prob_choice_high = results[3]
         accuracy = results[4]
         log_likelihood = results[5]  # Total log-likelihood across all blocks
-        params = results[6]
         
         # Create output dictionary
         value_dict = {
@@ -454,29 +449,24 @@ class ValueModelingClass:
             'method': method,
             'log_likelihood': log_likelihood,
             'accuracy': accuracy,
-            'params': params,
         }
         
         
-        # print(f"Q_low range: [{np.min(Q_low):.3f}, {np.max(Q_low):.3f}]")
-        # print(f"Q_high range: [{np.min(Q_high):.3f}, {np.max(Q_high):.3f}]")
+        print(f"Q_low range: [{np.min(Q_low):.3f}, {np.max(Q_low):.3f}]")
+        print(f"Q_high range: [{np.min(Q_high):.3f}, {np.max(Q_high):.3f}]")
         
         
         return value_dict
     
-    def plot_model_comparison(self, chosen_target, rewards, instructed_or_freechoice, num_trials_A=100, num_trials_B=100, 
+    def plot_model_comparison(self, hdf_file, num_trials_A=100, num_trials_B=100, 
                              models=None, window_size=10, save_path=None):
         """
         Compare multiple Q-learning models against actual behavior WITH AIC comparison.
         
         Parameters:
         -----------
-       chosen_target : arr
-           Behavioral choice data
-       rewards: arr
-           Behavioral rewards data
-       instructed_or_freechoice: arr
-           Data on whether each trial was instructed or was free choice
+        hdf_file : str or list of str
+            Path to HDF file(s)
         num_trials_A : int
             Number of trials in Block A
         num_trials_B : int
@@ -505,7 +495,7 @@ class ValueModelingClass:
         
         for model in models:
             print(f"\nRunning model: {model}")
-            model_results[model] = self.get_values(chosen_target, rewards, instructed_or_freechoice, num_trials_A, num_trials_B, method=model)
+            model_results[model] = self.get_values(hdf_file, num_trials_A, num_trials_B, method=model)
             
             # Calculate AIC: AIC = 2k - 2*log(L), where k is num_params and L is log-likelihood
             if num_trials_A>0 and num_trials_B>0:
@@ -550,13 +540,11 @@ class ValueModelingClass:
         
         trials = np.arange(len(actual_choices_low_Ap))
         
-        TRIALS_SHORTENED = 100
-        
         
         # ========== HIGH VALUE TARGET ==========
         ax=ax1
         # Plot actual behavior (RED)
-        ax.plot(trials[:TRIALS_SHORTENED], behavior_smoothed_high[:TRIALS_SHORTENED], 'r-', linewidth=3.0, label='Actual Behavior', zorder=10)
+        ax.plot(trials, behavior_smoothed_high, 'r-', linewidth=3.0, label='Actual Behavior', zorder=10)
         
         # Plot each model
         for model in models:
@@ -567,7 +555,7 @@ class ValueModelingClass:
                 props = self.model_properties.get(model,
                     {'color': 'gray', 'linestyle': '-', 'name': model})
                 
-                ax.plot(trials[:TRIALS_SHORTENED], prob_high[:TRIALS_SHORTENED],
+                ax.plot(trials, prob_high,
                         color=props['color'],
                         linestyle=props['linestyle'],
                         linewidth=2.0,
@@ -911,4 +899,3 @@ if __name__ == "__main__":
     plt.show()
     
     
-

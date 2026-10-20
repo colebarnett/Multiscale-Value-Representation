@@ -78,6 +78,19 @@ def get_trials_rewprob_volatility(df,stable_or_volatile,rew_prob):
     else:
         raise ValueError("Invalid value for stable_or_volatile")
 
+def get_trials_rewprob_volatility_Qchosen(df,stable_or_volatile,rew_prob):
+    if stable_or_volatile == 'all trials':
+        list1 = list(df.loc[(np.isclose(df['Rew_prob_1'],rew_prob)) & (df['Choice1']==1)].index)
+        list2 = list(df.loc[(np.isclose(df['Rew_prob_2'], rew_prob)) & (df['Choice2'] == 1)].index)
+    elif stable_or_volatile == 'stable block':
+        list1 = list(df.loc[(df['Stable']==1) & (np.isclose(df['Rew_prob_1'],rew_prob)) & (df['Choice1']==1)].index)
+        list2 = list(df.loc[(df['Stable'] == 1) & (np.isclose(df['Rew_prob_2'], rew_prob)) & (df['Choice2'] == 1)].index)
+    elif stable_or_volatile == 'volatile block':
+        list1 = list(df.loc[(df['Volatile'] == 1) & (np.isclose(df['Rew_prob_1'], rew_prob)) & (df['Choice1'] == 1)].index)
+        list2 = list(df.loc[(df['Volatile'] == 1) & (np.isclose(df['Rew_prob_2'], rew_prob)) & (df['Choice2'] == 1)].index)
+    else:
+        raise ValueError("Invalid value for stable_or_volatile")
+    return list1 + list2
 def linear_encoding_regression(spikes,behavior):
     '''
     Parameters
@@ -344,6 +357,27 @@ def get_trials(behav_df,stable_or_volatile):
             trials = all_trials
         case _:
             raise ValueError('Invalid subsession')
+            
+    return trials
+
+def get_trials_even_num(behav_df,stable_or_volatile):
+    
+    all_trials = np.arange(len(behav_df))
+    
+    match stable_or_volatile:
+        case 'stable block':
+            trials = all_trials[behav_df['Stable']==1]
+        case 'volatile block':
+            trials = all_trials[behav_df['Volatile']==1]
+        case 'all trials':
+            trials = all_trials
+        case _:
+            raise ValueError('Invalid subsession')
+    if stable_or_volatile != 'all trials': 
+        num_stable_trials = len(all_trials[behav_df['Stable']==1])
+        num_volatile_trials = len(all_trials[behav_df['Volatile']==1])
+        lowest_num_trials = np.min([num_stable_trials,num_volatile_trials])
+        trials = trials[:lowest_num_trials]
             
     return trials
 

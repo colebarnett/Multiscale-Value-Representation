@@ -182,6 +182,8 @@ def get_block_info(session):
             stable_1st()
         case 'braz20261002_05_te2633':
             volatile_1st()
+        case 'braz20261007_03_te2636':
+            volatile_1st()
         case _:
             raise ValueError(f"No info about stable/volatile 1st found for {session} !")
             

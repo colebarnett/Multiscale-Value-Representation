@@ -357,7 +357,8 @@ class ValueModelingClass:
              self.all_model_params_A, self.all_model_params_Ap)
     
     
-    def get_values(self, hdf_file, num_trials_A, num_trials_B, method='PersSingle'):
+    # def get_values(self, hdf_file, num_trials_A, num_trials_B, method='PersSingle'):
+    def get_values(self, chosen_target, rewards, instructed_or_freechoice, targetH_side, num_trials_A, num_trials_B, method='PersSingle'):
         """
         Extract Q-values from HDF file using specified Q-learning model.
         
@@ -401,26 +402,26 @@ class ValueModelingClass:
         if method not in self.model_functions:
             raise ValueError(f"Unknown method '{method}'. Available methods: {list(self.model_functions.keys())}")
         
-        # Convert single file to list for consistency
-        if isinstance(hdf_file, str):
-            hdf_files = [hdf_file]
-        else:
-            hdf_files = hdf_file
+        # # Convert single file to list for consistency
+        # if isinstance(hdf_file, str):
+        #     hdf_files = [hdf_file]
+        # else:
+        #     hdf_files = hdf_file
         
-        # Load behavioral data from HDF file(s)
-        behavior = ChoiceBehavior_TwoTargets_Stimulation(hdf_files, num_trials_A, num_trials_B)
+        # # Load behavioral data from HDF file(s)
+        # behavior = ChoiceBehavior_TwoTargets_Stimulation(hdf_files, num_trials_A, num_trials_B)
         
-        # Extract choices, rewards, and trial types
-        chosen_target, rewards, instructed_or_freechoice = behavior.GetChoicesAndRewards()
+        # # Extract choices, rewards, and trial types
+        # chosen_target, rewards, instructed_or_freechoice = behavior.GetChoicesAndRewards()
         
-        # Check if we got any trials
-        if len(chosen_target) == 0:
-            raise ValueError(
-                f"No trials extracted from HDF file!"
-            )
+        # # Check if we got any trials
+        # if len(chosen_target) == 0:
+        #     raise ValueError(
+        #         f"No trials extracted from HDF file!"
+        #     )
         
-        # Side of targetH at target onset (1 = left, 0 = right), only needed by side-bias models
-        targetH_side = behavior.targetH[behavior.state_time[behavior.ind_check_reward_states - 3]][:,2]
+        # # Side of targetH at target onset (1 = left, 0 = right), only needed by side-bias models
+        # targetH_side = behavior.targetH[behavior.state_time[behavior.ind_check_reward_states - 3]][:,2]
         
         # Run the Q-learning model
         # model_func = self.model_functions[method]

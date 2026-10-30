@@ -267,12 +267,25 @@ SESSIONS = [
             # # "braz20261009_03_te2642", #too few trials (1041), excluded
             ]
 
-REGRESSORS = [
+OFC_REGRESSORS = [
               'Q1',
               'Q2',
               'Choice1',
               # 'Qhigh',
               'Qchosen',
+              # 'Qdiff_',
+              # 'absQdiff',
+              # 'Choice_high',
+              'Side',
+              'Time',
+              ]
+
+CD_REGRESSORS = [
+              'Qleft',
+              'Qright',
+              # 'Choice1',
+              # 'Qhigh',
+              # 'Qchosen',
               # 'Qdiff_',
               # 'absQdiff',
               # 'Choice_high',
@@ -961,54 +974,29 @@ class ProcessBehavior:
         # pos_rpe[pos_rpe<0] = 0 #for positive rpe, set all negative rpes to zero
         # neg_rpe[neg_rpe>0] = 0 #for negative rpe, set all positive rpes to zero        
         
-        # Split Q1 and Q2 into Qlow and Qhigh. Also do for choices
-        Qlow = np.zeros_like(Q1)
-        Qhigh = np.zeros_like(Q2)
-        Qlow_choices = np.zeros_like(Q1)
-        Qhigh_choices = np.zeros_like(Q2)
-        for trial in range(len(Q1)):
-            
-            #Q1 = lower value -> Qlow=Q1 and Qhigh=Q2
-            if Q1[trial] < Q2[trial]: 
-                Qlow[trial] = Q1[trial]
-                Qhigh[trial] = Q2[trial]
-                
-                #if Q1 chosen, then Qlow chosen
-                if Q1_choices[trial] == 1: 
-                    Qlow_choices[trial] = 1
-                
-                #if Q2 chosen, then Qhigh chosen
-                else:                       
-                    Qhigh_choices[trial] = 1
+                   
                     
-            #Q1 = higher value -> Qlow=Q2 and Qhigh=Q1         
-            else:
-                Qlow[trial] = Q2[trial]
-                Qhigh[trial] = Q1[trial]
-                
-                #if Q1 chosen, then Qhigh chosen
-                if Q1_choices[trial] == 1: 
-                    Qhigh_choices[trial] = 1
-                
-                #if Q2 chosen, then Qlow chosen
-                else:                       
-                    Qlow_choices[trial] = 1
-            
+        # Split Q1 and Q2 into Qlow and Qhigh. Also do for choices
+        Q1_is_low = Q1 < Q2
+        chose_Q1 = np.asarray(Q1_choices) == 1
         
-        # Split Q1 and Q2 into Qchosen and Qunchosen    
-        Q_chosen = np.zeros_like(Q1)
-        Q_unchosen = np.zeros_like(Q2)
-        for trial in range(len(Q1)):
-            
-            # If Q1 chosen
-            if Q1_choices[trial]==1:
-                Q_chosen[trial] = Q1[trial]
-                Q_unchosen[trial] = Q2[trial]
-                
-            # if Q2 chosen
-            else:
-                Q_chosen[trial] = Q2[trial]
-                Q_unchosen[trial] = Q1[trial]
+        Qlow = np.where(Q1_is_low, Q1, Q2)
+        Qhigh = np.where(Q1_is_low, Q2, Q1)
+        
+        # Low option was chosen when "Q1 is low" and "Q1 was chosen" agree
+        chose_low = Q1_is_low == chose_Q1
+        Qlow_choices = chose_low.astype(Q1.dtype)
+        Qhigh_choices = (~chose_low).astype(Q2.dtype)
+        
+
+        # Split Q1 and Q2 into Qchosen and Qunchosen            
+        Q_chosen = np.where(chose_Q1, Q1, Q2)
+        Q_unchosen = np.where(chose_Q1, Q2, Q1)
+        
+        #assign QL and QR
+        left_choice = choice_side == 1
+        Q_L = np.where(left_choice,Q_chosen,Q_unchosen)
+        Q_R = np.where(left_choice,Q_unchosen,Q_chosen)
 
 
         assert len(choices) == len(choice_side) == len(time) == len(Q1) == len(Q2) == len(rpe) == len(is_stable_block) == len(rew_probs_1)
@@ -1018,6 +1006,7 @@ class ProcessBehavior:
             {'Q1':Q1,       'Q2':Q2,        'Choice1':Q1_choices,     'Choice2':Q2_choices, 
              'Qlow':Qlow,   'Qhigh':Qhigh,  'Qdiff_':Qdiff,  'absQdiff':absQdiff,
              'Qchosen':Q_chosen,            'Qunchosen':Q_unchosen,
+             'Qright':Q_R,                  'Qleft':Q_L,
              'Choice_low':Qlow_choices,  'Choice_high':Qhigh_choices,
              'Reward':rewards, 'RPE':rpe, 'Side':choice_side, 'Time':time,
              'Rew_prob_1':rew_probs_1, 'Rew_prob_2':rew_probs_2,
@@ -1622,54 +1611,54 @@ class LearningRate_Analysis:
                 df_rows_regression_weights = []
                 
                 
-                for alpha in LEARNING_RATES:
+                # for alpha in LEARNING_RATES:
 
-                    # get beahvior according to current learning rates
-                    Behavior.get_behavior(Q_learning=True, learning_rates=[alpha])
-                    regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
+                #     # get beahvior according to current learning rates
+                #     Behavior.get_behavior(Q_learning=True, learning_rates=[alpha])
+                #     regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
 
-                    # regress fr against this learning rate behavior
-                    res = utils.linear_encoding_regression(fr, regressor_matrix)
+                #     # regress fr against this learning rate behavior
+                #     res = utils.linear_encoding_regression(fr, regressor_matrix)
 
-                    row_dict_regression_weights = {'alpha': alpha}  # each row of the df will be the lrs for each reg
-                    # Get weights for each regressor
-                    regressor_names = res.params.keys()  # includes const in idx 0
+                #     row_dict_regression_weights = {'alpha': alpha}  # each row of the df will be the lrs for each reg
+                #     # Get weights for each regressor
+                #     regressor_names = res.params.keys()  # includes const in idx 0
 
-                    # loop thru all regressors
-                    for j in range(len(regressor_names)):
-                        if res.pvalues[
-                            regressor_names[j]] < ALPHA_THRESHOLD and res.f_pvalue < ALPHA_THRESHOLD:  # if signif
-                            row_dict_regression_weights[regressor_names[j]] = abs(
-                                res.params.values[j])  # fill in the row of the df with param
-                        else:
-                            row_dict_regression_weights[
-                                regressor_names[j]] = np.nan  # if not signif, put in nan so it will get skipped
+                #     # loop thru all regressors
+                #     for j in range(len(regressor_names)):
+                #         if res.pvalues[
+                #             regressor_names[j]] < ALPHA_THRESHOLD and res.f_pvalue < ALPHA_THRESHOLD:  # if signif
+                #             row_dict_regression_weights[regressor_names[j]] = abs(
+                #                 res.params.values[j])  # fill in the row of the df with param
+                #         else:
+                #             row_dict_regression_weights[
+                #                 regressor_names[j]] = np.nan  # if not signif, put in nan so it will get skipped
 
-                    df_rows_regression_weights.append(row_dict_regression_weights)
+                #     df_rows_regression_weights.append(row_dict_regression_weights)
                 
                 
-                # for pos_alpha in LEARNING_RATES:
-                #     for neg_alpha in LEARNING_RATES:
+                for pos_alpha in LEARNING_RATES:
+                    for neg_alpha in LEARNING_RATES:
                     
-                #         # get beahvior according to current learning rates
-                #         Behavior.get_behavior(Q_learning=True, learning_rates=[pos_alpha,neg_alpha])
-                #         regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
+                        # get beahvior according to current learning rates
+                        Behavior.get_behavior(Q_learning=True, learning_rates=[pos_alpha,neg_alpha])
+                        regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
                     
-                #         # regress fr against this learning rate behavior
-                #         res = utils.linear_encoding_regression(fr, regressor_matrix)
+                        # regress fr against this learning rate behavior
+                        res = utils.linear_encoding_regression(fr, regressor_matrix)
                     
-                #         row_dict_regression_weights = {'pos_alpha':pos_alpha, 'neg_alpha':neg_alpha} #each row of the df will be the lrs for each reg
-                #         # Get weights for each regressor
-                #         regressor_names = res.params.keys() #includes const in idx 0
+                        row_dict_regression_weights = {'pos_alpha':pos_alpha, 'neg_alpha':neg_alpha} #each row of the df will be the lrs for each reg
+                        # Get weights for each regressor
+                        regressor_names = res.params.keys() #includes const in idx 0
                         
-                #         #loop thru all regressors
-                #         for j in range(len(regressor_names)):
-                #             if res.pvalues[regressor_names[j]] < ALPHA_THRESHOLD and res.f_pvalue < ALPHA_THRESHOLD: #if signif
-                #                 row_dict_regression_weights[regressor_names[j]] = abs(res.params.values[j]) #fill in the row of the df with param
-                #             else:
-                #                 row_dict_regression_weights[regressor_names[j]] = np.nan #if not signif, put in nan so it will get skipped
+                        #loop thru all regressors
+                        for j in range(len(regressor_names)):
+                            if res.pvalues[regressor_names[j]] < ALPHA_THRESHOLD and res.f_pvalue < ALPHA_THRESHOLD: #if signif
+                                row_dict_regression_weights[regressor_names[j]] = abs(res.params.values[j]) #fill in the row of the df with param
+                            else:
+                                row_dict_regression_weights[regressor_names[j]] = np.nan #if not signif, put in nan so it will get skipped
                         
-                #         df_rows_regression_weights.append(row_dict_regression_weights)
+                        df_rows_regression_weights.append(row_dict_regression_weights)
                 
                 # Organize regression weights for each learning rate into a df  
                 regression_weights_df = pd.DataFrame(df_rows_regression_weights)
@@ -1690,15 +1679,15 @@ class LearningRate_Analysis:
                             idx_max_regressor = regression_weights_df[REGRESSORS[j]].idxmax()
                             
                             # Find and store learning rate which corresponds to max regression weight
-                            row_dict_learning_rates['Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['alpha'].iloc[idx_max_regressor]
-                            # row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['pos_alpha'].iloc[idx_max_regressor]
-                            # row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['neg_alpha'].iloc[idx_max_regressor]
+                            # row_dict_learning_rates['Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['alpha'].iloc[idx_max_regressor]
+                            row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['pos_alpha'].iloc[idx_max_regressor]
+                            row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['neg_alpha'].iloc[idx_max_regressor]
                     
                     else: #if all weights are nan
                         # Put in np.nan since its more consistent when saving and loading dfs
-                        row_dict_learning_rates['Learning Rate for ' + REGRESSORS[j]] = np.nan
-                        # row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = np.nan
-                        # row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = np.nan
+                        # row_dict_learning_rates['Learning Rate for ' + REGRESSORS[j]] = np.nan
+                        row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = np.nan
+                        row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = np.nan
                     
                 df_rows_learning_rates.append(row_dict_learning_rates)
                 
@@ -3982,6 +3971,8 @@ class PCA_Analysis:
         
         self.get_PCs_encoding_type()
         
+        self.get_PC_learning_rate()
+        
         return
     
     def get_n_dims_scree(self):
@@ -4067,12 +4058,45 @@ class PCA_Analysis:
         
         return pcs_dfs_dict
     
-    # def get_num_PCs_to_keep(self):
-    #     assert np.all( self.pca.explained_variance_ratio_ == np.sort(self.pca.explained_variance_ratio_,descending=True) )
-    #     cumul_var_explained = np.cumsum(self.pca.explained_variance_ratio_)
-    #     num_pcs_to_keep = sum(cumul_var_explained < self.pct_var_explained) + 1 #get all PCs needed to explain specified pct_var_explained
+    @staticmethod
+    def get_n_dims_pctvar_hist():
+        pct_vars = [0.5,0.6,0.7,0.8,0.9] 
+        min_num_units = 3
+       
+        for pct_var_explained in pct_vars:
+            n_dims_list = []
+            for s,session in enumerate(SESSIONS):
+                
+                Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+                
+                for area in AREAS:
+    
+                    area_fr_df = utils.area_parser(Spikes.fr_df,area)
+                    n_units = len(area_fr_df.keys())
+                    if n_units < min_num_units:
+                        continue #skip if not enough units for this session and area
+                        
+                    # _ = self.get_PCs(area_fr_df,session)
+                    
+                    pca = sklearn.decomposition.PCA()
+                    pca = pca.fit(area_fr_df.values) #n_obs x n_components = n_trials x n_units
+                    
+                    assert np.all( pca.explained_variance_ratio_ == np.sort(pca.explained_variance_ratio_,descending=True) ) #make sure sorted big to small
+                    cumul_var_explained = np.cumsum(pca.explained_variance_ratio_)
+                    num_pcs_to_keep = sum(cumul_var_explained < pct_var_explained) + 1 #get all PCs needed to explain specified pct_var_explained
+                    n_dims_list.append(num_pcs_to_keep)
+                    
+                    
+            fig,ax=plt.subplots(layout='constrained')
+            ax.hist(n_dims_list)
+            ax.vlines(np.median(n_dims_list),0,np.max(np.histogram(n_dims_list)[0]),'k',linestyle='--',label=f'median={np.median(n_dims_list)}')
+            ax.legend()
+            ax.set_ylabel('num populations')
+            ax.set_xlabel('num dims')
+            ax.set_title(f'Num Dims needed to explain {pct_var_explained*100}% of Variance')
         
-    #     return num_pcs_to_keep
+                
+        return 
     
     def get_PCs_encoding_type(self):
         
@@ -4189,15 +4213,23 @@ class PCA_Analysis:
                 
     def get_PC_learning_rate(self):
         
+            
         for s,session in enumerate(SESSIONS):
             
-            for s,session in enumerate(SESSIONS):
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            
+            for area in AREAS:
                 
-                Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+                try:
+                    pc_df = self.pcs_dfs_dict[session][area]
+                except KeyError: #skip if no neurons for area
+                    continue
                 
-                for area in AREAS:
-                    
-                    learning_rate_df = LearningRate_Analysis.get_learning_rates(pcs_df,Behav,pcs_type_df,do_even_num_trials=True)
+                assert utils.does_csv_exist(f'PCA_EncodingTypes_{area}',session,DATA_FOLDER)
+                pcs_encodingtype_df = utils.load_csv(f'PCA_EncodingTypes_{area}',session,DATA_FOLDER)
+                
+                if not utils.does_csv_exist(f'PCA_LearningRates_{area}',session,DATA_FOLDER):
+                    learning_rate_df = LearningRate_Analysis.get_learning_rates(pc_df,Behav,pcs_encodingtype_df,do_even_num_trials=True)
                     utils.save_csv(learning_rate_df,f'PCA_LearningRates_{area}',session,DATA_FOLDER)
         
         return
@@ -4244,27 +4276,33 @@ class PCA_Analysis:
             
         print('Plotting..')
         return
-    
-    @staticmethod   
-    def get_rsqrs():
+     
+    def get_rsqrs(self):
 
         rsqrs_dict = {stable_or_volatile: [] for stable_or_volatile in SUBSESSIONS}
         for s,session in enumerate(SESSIONS):
-            
-            start = time.time()
-            
-            print(session)
-            
+            start=time.time()
             
             Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-            neuron_type_df = utils.load_csv('NeuronTypes',session,DATA_FOLDER)
-            learning_rate_df = utils.load_csv('LearningRatesSingle',session,DATA_FOLDER)
             
-            for stable_or_volatile in SUBSESSIONS:
+            for area in AREAS:
+                
+                try:
+                    pc_df = self.pcs_dfs_dict[session][area]
+                except KeyError: #skip if no neurons for area
+                    continue
+                
+                
+                assert utils.does_csv_exist(f'PCA_EncodingTypes_{area}',session,DATA_FOLDER)
+                encoding_type_df = utils.load_csv(f'PCA_EncodingTypes_{area}',session,DATA_FOLDER)
+                assert utils.does_csv_exist(f'PCA_LearningRates_{area}',session,DATA_FOLDER)
+                learning_rate_df = utils.load_csv(f'PCA_LearningRates_{area}',session,DATA_FOLDER)
             
-                rsqrs_sess = utils.get_rsqrs_from_LRs(stable_or_volatile, Spikes.fr_df, Behav, neuron_type_df, learning_rate_df, do_even_num_trials, REGRESSORS)
-                rsqrs_dict[stable_or_volatile] = rsqrs_dict[stable_or_volatile] + rsqrs_sess
-            
+                for stable_or_volatile in SUBSESSIONS:
+                
+                    rsqrs_sess = utils.get_rsqrs_from_LRs(stable_or_volatile, pc_df, Behav, encoding_type_df, learning_rate_df, do_even_num_trials=True, REGRESSORS=REGRESSORS)
+                    rsqrs_dict[stable_or_volatile] = rsqrs_dict[stable_or_volatile] + rsqrs_sess
+                
             utils.get_time_left(start,s,len(SESSIONS)) 
         
         #get avgs and sem
@@ -5122,11 +5160,13 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # behavior_checks()
 # behavior_checks_2()
 
-# PCA=PCA_Analysis(overwrite_flag=False)
+PCA=PCA_Analysis(overwrite_flag=False)
 # _=PCA.count_allPCs_encoding_type()
 # _=PCA.count_eachPC_encoding_type()
 # PCA vs behavior
 # PCA_Analysis.plot_PCA_trajs(list_of_sessions=SESSIONS,num_trials_to_plot=200)
+# PCA_Analysis.get_n_dims_pctvar_hist()
+
 
 # plot_behavior_new("braz20260824_03_te2584") # go to method and comment/uncomment plots you want to do
 
@@ -5153,7 +5193,7 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # LR = LearningRate_Analysis(overwrite_flag=False,do_volatile_first_only=True)
 # LR = LearningRate_Analysis(overwrite_flag=False,do_stable_first_only=True)
 # Even number of trials control analysis
-LR = LearningRate_Analysis(overwrite_flag=False,do_even_num_trials=False)
+# LR = LearningRate_Analysis(overwrite_flag=False,do_even_num_trials=False)
 
 
 # TemporalAnalysis = Temporal_Analysis()

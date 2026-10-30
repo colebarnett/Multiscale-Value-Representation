@@ -257,12 +257,12 @@ SESSIONS = [
             "braz20260911_03_te2608",
             "braz20260915_05_te2613",
             "braz20260916_03_te2616",
-            # "braz20260918_03_te2619",
-            # "braz20260924_03_te2622",
-            # "braz20260925_03_te2625",
-            # "braz20261001_03_te2628",
+            "braz20260918_03_te2619",
+            "braz20260924_03_te2622",
+            "braz20260925_03_te2625",
+            "braz20261001_03_te2628",
             # # "braz20261002_05_te2633", #too few trials (747), excluded
-            # "braz20261007_03_te2636",
+            "braz20261007_03_te2636",
             # # "braz20261008_03_te2639", #too few trials (845), excluded
             # # "braz20261009_03_te2642", #too few trials (1041), excluded
             ]
@@ -280,6 +280,15 @@ REGRESSORS = [
               'Time',
               ]
 
+REGRESSOR_COLORS = [
+                    'lime',
+                    'cyan',
+                    'orange',
+                    'aquamarine',
+                    'red',
+                    'gray',
+                    ]
+
 FREQ_BANDS = {'Theta':(3.5,8.5), # Define freq bands (Hz)
               'Alpha':(8.5,12.5),
               'Beta':(12.5,30.5),
@@ -291,8 +300,8 @@ AREAS = ['Cd','OFC']
 
 REW_PROBS = [0., 0.2, 0.4, 0.6, 0.8, 1.]
 
-VALUE_MODEL = 'DualBaseline'
-# VALUE_MODEL = 'DualBaselineSide'
+# VALUE_MODEL = 'DualBaseline'
+VALUE_MODEL = 'DualBaselineSide'
 
 ALIGNMENT = 'Targets On' 
 # Options are 'Targets On', 'Choice Made', and 'Reward' 
@@ -307,8 +316,8 @@ T_RES = 0.05 #time resolution ; size of time bins [s]
 T_VECTOR = np.round(np.arange(-T_BEFORE+T_RES, T_AFTER, T_RES),decimals=2)
 N_TIMEBINS = len(T_VECTOR)
 
-# LEARNING_RATES = np.linspace(start=0.01,stop=0.99,num=50) #used for single learning rate
-LEARNING_RATES = np.linspace(start=0.05,stop=0.95,num=19) #used for dual learning rates
+LEARNING_RATES = np.linspace(start=0.00,stop=1.0,num=51) #used for single learning rate
+# LEARNING_RATES = np.linspace(start=0.00,stop=1.0,num=21) #used for dual learning rates
 
 # REGRESSORS = ['Q1','Q2','Choice1',
 #               'Qlow','Qhigh','Qdiff','absQdiff',
@@ -760,300 +769,6 @@ class ProcessSpikes:
 
 
 
-class ProcessLFP:
-    '''
-    From .mat, .hdf, and .ns2 files, load LFP data aligned to task events.
-    
-    Output: DataFrame with LFP trace for each ch for each trial
-    '''
-    
-    def __init__(self, session: str, verbose=False):
-
-        
-        self.session = session
-        self.file_prefix = os.path.join(DATA_FOLDER, self.session, self.session)
-
-        ## Data
-        self.has_hdf = False # For behavior
-        self.has_ns5 = False # For syncing 
-        self.has_ns2 = False # For LFP
-        self.has_nev = False # For waveform 
-        self.has_decoder = False # For decoder
-        self.has_mat = False # For syncing
-        self.has_pkl = False # For spike times
-        self.check_files()
-        
-        ## Load LFP data
-        assert self.has_ns2, FileNotFoundError(f'.ns2 file not found! Session: {self.session}')
-        
-        ## Get Times Align
-        self.times_align = None #(secs)
-        self.get_times_align_ns2()
-        
-        ## Get LFP snippets for Desired Epoch
-        
-        self.t_vector = T_VECTOR
-        self.alignment = ALIGNMENT
-        self.snips = self.get_lfp_snippets(self.times_align,T_BEFORE,T_AFTER) # (trials x chs x samples)
-        # self.snips_dict = {'data':self.snips,'t_before':T_BEFORE,'t_after':T_AFTER,'alignment':ALIGNMENT}
-        
-        ## Define chs for each Area
-        self.session_areas = get_area_info(self.session)
-        self._get_chs()
-        # assert self.n_chs == 96, f'{self.n_chs} chs!'
-        
-
-        ## Save Out Processed Data
-        # self.dict_out = {'Session':session, 'snips_dict':self.snips_dict,
-        #                  'fs':self.fs, 'n_chs':self.n_chs, 'n_trials':self.n_trials,
-        #                  'session_areas':self.session_areas}
-        
-        self.all_bandpowers = self.get_all_bandpowers()
-        del self.snips # to free up ~0.5gb memory. Snips aren't used elsewhere in code so far
-        # utils.save_pkl(self, 'LFP', self.session,DATA_FOLDER)
-        
-        
-    def _get_chs(self):
-        
-        has_vmPFC = 'vmPFC' in self.session_areas
-        has_Cd = 'Cd' in self.session_areas
-        has_OFC = 'OFC' in self.session_areas
-        
-        #vmPFC
-        if has_vmPFC:
-            self.vmPFC_chs = np.arange(0,32)
-        
-        #Cd
-        if has_vmPFC and has_Cd:
-            self.Cd_chs = np.arange(32,64)
-            
-        elif not has_vmPFC and has_Cd:
-            self.Cd_chs = np.arange(0,32)
-        
-        #OFC
-        if has_vmPFC and has_Cd and has_OFC:
-            self.OFC_chs = np.arange(64,96)
-        elif (has_vmPFC ^ has_Cd) and has_OFC: #  ^ = XOR
-            self.OFC_chs = np.arange(32,64)
-        elif not has_vmPFC and not has_Cd and has_OFC:
-            self.OFC_chs = np.arange(0,32)
-            
-        return
-    
-    
-    def check_files(self):
-        """
-        For a proper analysis to be done,
-        the hdf, nev, mat, and pkl files are essential.
-        The ns5 and ns2 are optional.
-        """
-        
-        if os.path.exists(self.file_prefix + '.hdf'):
-            self.has_hdf = True
-        if os.path.exists(self.file_prefix + '.ns5'):
-            self.has_ns5 = True
-        if os.path.exists(self.file_prefix + '.ns2'):
-            self.has_ns2 = True
-        if os.path.exists(self.file_prefix + '.nev'):
-            self.has_nev = True
-        if os.path.exists(self.file_prefix + '_syncHDF.mat'):
-            self.has_mat = True
-        if os.path.exists(self.file_prefix + '_nev_output.pkl'):
-            self.has_nev_output = True
-        if os.path.exists(self.file_prefix + '_KFDecoder.pkl'):
-            self.has_decoder = True
-        if os.path.exists(self.file_prefix + '_spike_times_dict.pkl'):
-            self.has_pkl = True
-
-        
-    def get_times_align_ns2(self):
-        '''
-        Gets the array of indices (sample numbers) corresponding to the hold_center, 
-        target, and check_reward time points of the given session.
-        This facilitates time-aligned analyses.
-        
-        Parameters
-        ----------
-        hdf_files : list of hdf files for a single session
-        syncHDF_files : list of syncHDF_files files which are used to make the alignment between behavior data and spike data
-            
-        Outputs
-        -------
-        target_hold_TDT_ind : 1D array containing the TDT indices for the target hold onset times of the given session
-        '''
-        
-        assert self.has_hdf, FileNotFoundError(f'.hdf file not found! Session: {self.session}')
-        assert self.has_mat, FileNotFoundError(f'.mat file not found! Session: {self.session}')
-        
-        self.hdf_file = self.file_prefix + '.hdf'
-        self.syncHDF_file = self.file_prefix + '_syncHDF.mat'
-        
-        fs_hdf = 60 #hdf fs is always 60
-        
-        # load behavior data
-        cb = BehaviorAnalysis.ChoiceBehavior_Whitehall([self.hdf_file]) #method needs hdf filenames in a list
-        self.n_trials = cb.num_successful_trials
-        
-        # Find times for successful trials, depending on times_align reference point chosen
-        match ALIGNMENT:
-            case 'Targets On': #targets appearing, 'hold_center'
-                ind = cb.ind_check_reward_states - 4 #times corresponding to hold center onset
-                
-            case 'Choice Made': #choice made, 'target'
-                ind = cb.ind_check_reward_states - 2 # times corresponding to target hold onset
-            
-            case 'Reward': #reward/no reward info dispensed to subject, 'check_reward'
-                ind = cb.ind_check_reward_states #times corresponding to reward period onset
-        
-        
-        # align spike tdt times with hold center hdf indices using syncHDF files
-        time_align_TDT_ind, DIO_freq = BehaviorAnalysis.get_HDFstate_TDT_LFPsamples(ind,cb.state_time,self.syncHDF_file)
-
-        # Ensure that we have a 1 to 1 correspondence btwn indices we put in and indices we got out.
-        assert len(time_align_TDT_ind) == len(ind), f'Repeat hold times! Session: {self.session}'
-        assert len(time_align_TDT_ind) == self.n_trials
-
-        self.times_align = time_align_TDT_ind / DIO_freq #convert from samples (30k sampling rate btw) to seconds        
-
-        print('Alignment loaded!')
-
-        return 
-        
-        
-    def get_lfp_snippets(self,times_align,t_before=0.5,t_after=0.5):
-        '''
-        Count how many spikes occured in the time window of interest and then divide by window length.
-        Time window defined as [time_align - t_before : time_align + t_after] (units are seconds)
-        
-
-        Returns
-        -------
-        None.
-
-        '''
-
-        print('Getting LFP Snippets..')
-        self.ns2file = NsxFile(self.file_prefix + '.ns2')
-        self.fs = 1000.
-        assert self.ns2file.basic_header['Label'] == '1 ksamp/sec'
-        
-        #convert from secs to samples
-        samps_before = np.round(self.fs * t_before).astype(int)
-        samps_after = np.round(self.fs * t_after).astype(int)
-        samps_align = np.round(self.fs * times_align).astype(int)
-        
-        data = self.ns2file.getdata()['data'] # (chs x samples) [uV]
-        self.n_chs = np.shape(data)[0]
-        snippets = np.zeros((len(samps_align), self.n_chs, samps_before+samps_after)) # (trials x chs x samples)
-
-        #Loop thru trials
-        for trial, samp_align in enumerate(samps_align):
-        
-            #Get window of samples for current trial (all units are now samples)
-            samp_begin = samp_align - samps_before
-            samp_end = samp_align + samps_after
-            
-            #Get time-aligned snippet for current trial from LFP data array. Filter out line noise too
-            snippets[trial,:,:] = self.filter_line_noise(data[:,samp_begin:samp_end])
-        
-        self.ns2file.close()
-        self.ns2file = None
-        print('LFP Snippets compiled!')       
-        return snippets # (trials x chs x samples)
-
-
-    def filter_line_noise(self,sig):
-        
-        #set up to notch filter out 60,120,180 Hz line noise
-        Q=30 #quality factor
-        b60,a60 = sp.signal.iirnotch(60.,Q,self.fs) #this is done after downsampling would be done
-        b120,a120 = sp.signal.iirnotch(120.,Q,self.fs)
-        b180,a180 = sp.signal.iirnotch(180.,Q,self.fs)
-        
-        # Filter line noise    
-        sig = sp.signal.filtfilt(b60,a60,sig) #filter out 60hz noise
-        sig = sp.signal.filtfilt(b60,a60,sig) #filter out 60hz noise, again
-        sig = sp.signal.filtfilt(b120,a120,sig) #filter out 120hz noise
-        sig = sp.signal.filtfilt(b180,a180,sig) #filter out 180hz noise
-        # snippets = sp.signal.decimate(snippets,q) #downsample down to 500Hz. This function applies anti-aliasing filters.
-        
-        return sig
-
-    def _get_bandpower_area(self, freq_band: str, area: str):
-        '''
-        Power calculated by mean of sqaure of signal 
-        (integrating square of signal over time window and dividing by number of time steps)
-
-        Parameters
-        ----------
-        freq_band : str
-            DESCRIPTION.
-        area : str
-            DESCRIPTION.
-
-        Raises
-        ------
-        ValueError
-            DESCRIPTION.
-
-        Returns
-        -------
-        TYPE
-            DESCRIPTION.
-
-        '''
-        print(f'Getting {freq_band} power for {area}..')
-        def bandpass_filter(sig,f_lo,f_hi,fs):
-            order = 4
-            sos = sp.signal.butter(order,[f_lo,f_hi],'bandpass',output='sos',fs=fs)
-            sig_out = sp.signal.sosfiltfilt(sos,sig)
-            return sig_out
-        
-        match area:
-            case 'vmPFC':
-                chs = self.vmPFC_chs
-            case 'Cd':
-                chs = self.Cd_chs
-            case 'OFC':
-                chs = self.OFC_chs
-            case _:
-                raise ValueError('Invalid brain area')
-        n_chs = len(chs)
-        
-        f_lo = FREQ_BANDS[freq_band][0]
-        f_hi = FREQ_BANDS[freq_band][1]
-        
-        band_power_chs = np.zeros((n_chs,self.n_trials,N_TIMEBINS))
-        for i,ch in enumerate(chs):
-            for trial in range(self.n_trials):
-                snip = self.snips[trial,ch,:]
-                snip_filt = bandpass_filter(snip,f_lo,f_hi,self.fs)
-                snip_sq = snip_filt*snip_filt
-                
-                for k in range(N_TIMEBINS):
-                    win_start, win_end = k, k+1 # [timebin #]
-                    band_power_chs[i,trial,k] = np.mean(snip_sq[win_start:win_end])
-                    
-        norm_band_power_chs = sp.stats.zscore(band_power_chs,axis=1,nan_policy='omit') #zscore over trials before avging over chs. This ensuresbig magnitude chs don't swamp small mag chs
-        band_power_area = np.nanmean(norm_band_power_chs,axis=0) #avg over all chs of that area
-        return band_power_area # shape = (trials x timepoints)
-    
-    
-    def get_all_bandpowers(self,overwrite_flag=False):
-
-        n_bands = len(FREQ_BANDS)
-        n_areas = len(self.session_areas)
-        all_bandpowers = dict()
-        bandpowers = np.zeros((self.n_trials,n_bands,N_TIMEBINS))
-        for i,area in enumerate(self.session_areas):
-            for j,freq_band in enumerate(FREQ_BANDS):
-                bandpowers[:,j,:] = self._get_bandpower_area(freq_band,area)
-            
-            all_bandpowers[area] = bandpowers
-                
-        return all_bandpowers # dict of arrays for each area of shape = (trials x freq_bands x timepoints)
-    
-
 
 
 
@@ -1205,7 +920,7 @@ class ProcessBehavior:
                 # Q1,Q2,_,_,_,_ = BehaviorAnalysis.Calc_DistrQlearning_2Targs_DualBaseline(learning_rates[0],learning_rates[1],beta,Q0,choices,rewards,instructed_or_freechoice)
                 Q1,Q2,_,_,_,_ = Calc_DistrQlearning_2Targs_DualBaselineSide(parameters, Q0, choices, rewards, instructed_or_freechoice, choice_side_raw)
             elif len(learning_rates)==1: #single
-                parameters = [learning_rates,beta,kappa]
+                parameters = [learning_rates[0],beta,kappa]
                 # Q1,Q2,_,_,_,_ = BehaviorAnalysis.Calculate_Qlearning(beta, learning_rates[0], Q0, choices,rewards,instructed_or_freechoice)
                 Q1,Q2,_,_,_,_ = Calc_DistrQlearning_2Targs_BaselineSide(parameters, Q0, choices, rewards, instructed_or_freechoice, choice_side_raw)
         elif Q_learning and not learning_rates: #do Rishi's Q-learning method w/ specified model
@@ -1479,7 +1194,7 @@ class ProcessBehavior:
         if save_flag:
             utils.save_svg(fig,self.session,'ValueVsRews',PROJ_FOLDER)
         
-        return fig
+        return fig,ax
     
     
     def plot_values_vs_rewprob(self,num_targs=2,num_trials_to_plot=200,save_flag=False):
@@ -1500,13 +1215,44 @@ class ProcessBehavior:
         ax.set_title('Modeled Values vs Actual Reward Probability')
         ax.legend()
         ax.set_xlabel('Trials')
+        ax.set_ylabel('Value')
         
         fig.suptitle(f'{self.session}\n{VALUE_MODEL}')   
         
         if save_flag:
             utils.save_svg(fig,self.session,'ValueVsRewProb',PROJ_FOLDER)
         
-        return fig
+        return fig,ax
+    
+    def plot_specific_value_vs_rewprob(self,value_type='Q1',num_trials_to_plot=200,save_flag=False):
+        
+        fig,ax=plt.subplots(layout='constrained')
+        
+        color = 'red'
+        
+        #Q-learning values
+        ax.plot(self.behavior_df[value_type].iloc[:num_trials_to_plot],color=color,label=value_type)
+        
+        #actual rew prob (only for q1 and q2)
+        if value_type == 'Q1':
+            ax.plot(self.behavior_df['Rew_prob_1'].iloc[:num_trials_to_plot],color=color,linestyle='--',label='Reward Probability 1')
+        elif value_type == 'Q2':
+            ax.plot(self.behavior_df['Rew_prob_2'].iloc[:num_trials_to_plot],color=color,linestyle='--',label='Reward Probability 2')
+        
+        #plot labels
+        ax.set_title(f'Modeled {value_type} Values')
+        ax.legend()
+        ax.set_xlabel('Trials')
+        ax.set_ylabel('Value',color=color)
+        ax.tick_params(axis='y', labelcolor=color)
+        
+        fig.suptitle(f'{self.session}\n{VALUE_MODEL}')   
+        
+        if save_flag:
+            utils.save_svg(fig,self.session,'SpecificValue',PROJ_FOLDER)
+        
+        
+        return fig,ax
     
     def plot_value_dist(self,save_flag=False):
         
@@ -1724,7 +1470,7 @@ class ProcessBehavior:
 
 class LearningRate_Analysis:
     
-    def __init__(self,overwrite_flag=False,do_stable_first_only=False,do_volatile_first_only=False,do_even_num_trials=False):
+    def __init__(self,overwrite_flag=False,do_stable_first_only=False,do_volatile_first_only=False,do_even_num_trials=True):
         
         self.fig_folder = 'LearningRates'
         
@@ -1754,12 +1500,12 @@ class LearningRate_Analysis:
                 return
             
             # Get learning rate for each unit
-            if not overwrite_flag and utils.does_csv_exist('LearningRates',session,DATA_FOLDER): #don't overwrite, load
-                learning_rate_df = utils.load_csv('LearningRates',session,DATA_FOLDER)
+            if not overwrite_flag and utils.does_csv_exist('LearningRatesSingle',session,DATA_FOLDER): #don't overwrite, load
+                learning_rate_df = utils.load_csv('LearningRatesSingle',session,DATA_FOLDER)
             else: #don't load, compute
                 Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-                learning_rate_df = self.get_learning_rates(Spikes.fr_df,Behav,neuron_type_df)
-                utils.save_csv(learning_rate_df,'LearningRates',session,DATA_FOLDER)
+                learning_rate_df = self.get_learning_rates(Spikes.fr_df,Behav,neuron_type_df,self.do_even_num_trials)
+                utils.save_csv(learning_rate_df,'LearningRatesSingle',session,DATA_FOLDER)
             self.lr_dfs.append(learning_rate_df)
             self.nt_dfs.append(neuron_type_df)
             
@@ -1782,19 +1528,59 @@ class LearningRate_Analysis:
             suptitle = 'All Sessions'
             
         # Plot
-        self.plot_learning_rate_dual_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        self.plot_learning_rate_dual_hists(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        self.plot_winbias_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        self.plot_learning_rate_scatter_1(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        self.plot_learning_rate_scatter_2(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        self.plot_learning_rate_scatter_all_combined(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        self.plot_winbias_hist(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_dual_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_dual_hists_new(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        self.plot_learning_rate_single_hists_new(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_winbias_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_scatter_1(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_scatter_2(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_scatter_all_combined(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_winbias_hist(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
         
         return 
         
+    @staticmethod   
+    def get_rsqrs(do_even_num_trials):
 
+        rsqrs_dict = {stable_or_volatile: [] for stable_or_volatile in SUBSESSIONS}
+        for s,session in enumerate(SESSIONS):
+            
+            start = time.time()
+            
+            print(session)
+            
+            
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            neuron_type_df = utils.load_csv('NeuronTypes',session,DATA_FOLDER)
+            learning_rate_df = utils.load_csv('LearningRatesSingle',session,DATA_FOLDER)
+            
+            for stable_or_volatile in SUBSESSIONS:
+            
+                rsqrs_sess = utils.get_rsqrs_from_LRs(stable_or_volatile, Spikes.fr_df, Behav, neuron_type_df, learning_rate_df, do_even_num_trials, REGRESSORS)
+                rsqrs_dict[stable_or_volatile] = rsqrs_dict[stable_or_volatile] + rsqrs_sess
+            
+            utils.get_time_left(start,s,len(SESSIONS)) 
         
-    def get_learning_rates(self,fr_df,Behavior,neuron_type_df):
+        #get avgs and sem
+        avgs,sems=[],[]
+        for stable_or_volatile in SUBSESSIONS:
+            avg,sem = utils.get_avg_sem(rsqrs_dict[stable_or_volatile],axis=0)
+            avgs.append(avg)
+            sems.append(sem)
+            
+        fig,ax=plt.subplots(layout='constrained')
+        ax.bar(SUBSESSIONS,avgs,yerr=sems)
+        ax.set_ylabel('R-Squared')
+        ax.set_title('R-Squareds of neurons with fitted learning rates')
+        
+        return
+        
+    
+    
+
+    
+    @staticmethod    
+    def get_learning_rates(fr_df,Behavior,neuron_type_df,do_even_num_trials):
     
         df_rows_learning_rates = []
         print(f'{len(fr_df.columns)} neurons')
@@ -1804,7 +1590,7 @@ class LearningRate_Analysis:
             assert len(Behavior.behavior_df) == len(fr_df), 'Number of trials do not match!'
             # num_trials = len(fr_df)
             
-            if self.do_even_num_trials:
+            if do_even_num_trials:
                 trials = utils.get_trials_even_num(Behavior.behavior_df,stable_or_volatile)
             else:
                 trials = utils.get_trials(Behavior.behavior_df,stable_or_volatile)
@@ -1825,7 +1611,6 @@ class LearningRate_Analysis:
             for i,unit in enumerate(units):
                 
                 start = time.time()
-                
                 neuron_type = str(utils.get_unit_data(neuron_type_df, f'{unit} - all trials', 'Neuron Type'))
                 if "Q" not in neuron_type:
                     continue
@@ -1835,28 +1620,56 @@ class LearningRate_Analysis:
                 ## Get regression weights for all learning rate combos
                 #loop thru all possible learning rates
                 df_rows_regression_weights = []
-                for pos_alpha in LEARNING_RATES:
-                    for neg_alpha in LEARNING_RATES:
+                
+                
+                for alpha in LEARNING_RATES:
+
+                    # get beahvior according to current learning rates
+                    Behavior.get_behavior(Q_learning=True, learning_rates=[alpha])
+                    regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
+
+                    # regress fr against this learning rate behavior
+                    res = utils.linear_encoding_regression(fr, regressor_matrix)
+
+                    row_dict_regression_weights = {'alpha': alpha}  # each row of the df will be the lrs for each reg
+                    # Get weights for each regressor
+                    regressor_names = res.params.keys()  # includes const in idx 0
+
+                    # loop thru all regressors
+                    for j in range(len(regressor_names)):
+                        if res.pvalues[
+                            regressor_names[j]] < ALPHA_THRESHOLD and res.f_pvalue < ALPHA_THRESHOLD:  # if signif
+                            row_dict_regression_weights[regressor_names[j]] = abs(
+                                res.params.values[j])  # fill in the row of the df with param
+                        else:
+                            row_dict_regression_weights[
+                                regressor_names[j]] = np.nan  # if not signif, put in nan so it will get skipped
+
+                    df_rows_regression_weights.append(row_dict_regression_weights)
+                
+                
+                # for pos_alpha in LEARNING_RATES:
+                #     for neg_alpha in LEARNING_RATES:
                     
-                        # get beahvior according to current learning rates
-                        Behavior.get_behavior(Q_learning=True, learning_rates=[pos_alpha,neg_alpha])
-                        regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
+                #         # get beahvior according to current learning rates
+                #         Behavior.get_behavior(Q_learning=True, learning_rates=[pos_alpha,neg_alpha])
+                #         regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
                     
-                        # regress fr against this learning rate behavior
-                        res = utils.linear_encoding_regression(fr, regressor_matrix)
+                #         # regress fr against this learning rate behavior
+                #         res = utils.linear_encoding_regression(fr, regressor_matrix)
                     
-                        row_dict_regression_weights = {'pos_alpha':pos_alpha, 'neg_alpha':neg_alpha} #each row of the df will be the lrs for each reg
-                        # Get weights for each regressor
-                        regressor_names = res.params.keys() #includes const in idx 0
+                #         row_dict_regression_weights = {'pos_alpha':pos_alpha, 'neg_alpha':neg_alpha} #each row of the df will be the lrs for each reg
+                #         # Get weights for each regressor
+                #         regressor_names = res.params.keys() #includes const in idx 0
                         
-                        #loop thru all regressors
-                        for j in range(len(regressor_names)):
-                            if res.pvalues[regressor_names[j]] < ALPHA_THRESHOLD and res.f_pvalue < ALPHA_THRESHOLD: #if signif
-                                row_dict_regression_weights[regressor_names[j]] = abs(res.params.values[j]) #fill in the row of the df with param
-                            else:
-                                row_dict_regression_weights[regressor_names[j]] = np.nan #if not signif, put in nan so it will get skipped
+                #         #loop thru all regressors
+                #         for j in range(len(regressor_names)):
+                #             if res.pvalues[regressor_names[j]] < ALPHA_THRESHOLD and res.f_pvalue < ALPHA_THRESHOLD: #if signif
+                #                 row_dict_regression_weights[regressor_names[j]] = abs(res.params.values[j]) #fill in the row of the df with param
+                #             else:
+                #                 row_dict_regression_weights[regressor_names[j]] = np.nan #if not signif, put in nan so it will get skipped
                         
-                        df_rows_regression_weights.append(row_dict_regression_weights)
+                #         df_rows_regression_weights.append(row_dict_regression_weights)
                 
                 # Organize regression weights for each learning rate into a df  
                 regression_weights_df = pd.DataFrame(df_rows_regression_weights)
@@ -1877,13 +1690,15 @@ class LearningRate_Analysis:
                             idx_max_regressor = regression_weights_df[REGRESSORS[j]].idxmax()
                             
                             # Find and store learning rate which corresponds to max regression weight
-                            row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['pos_alpha'].iloc[idx_max_regressor]
-                            row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['neg_alpha'].iloc[idx_max_regressor]
+                            row_dict_learning_rates['Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['alpha'].iloc[idx_max_regressor]
+                            # row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['pos_alpha'].iloc[idx_max_regressor]
+                            # row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['neg_alpha'].iloc[idx_max_regressor]
                     
                     else: #if all weights are nan
                         # Put in np.nan since its more consistent when saving and loading dfs
-                        row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = np.nan
-                        row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = np.nan
+                        row_dict_learning_rates['Learning Rate for ' + REGRESSORS[j]] = np.nan
+                        # row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = np.nan
+                        # row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = np.nan
                     
                 df_rows_learning_rates.append(row_dict_learning_rates)
                 
@@ -2096,6 +1911,13 @@ class LearningRate_Analysis:
                 label_stabs = f'stable block\nnum_units: {len(winbias_stabs)}'
                 winbias_delta = winbias_vols - winbias_stabs
                 label_delta = f'volatile - stable\nnum_units: {len(winbias_delta)}'
+                
+                
+                print(col_noprefix)
+                print(len(pos_vols))
+                print(len(pos_stabs))
+                print(len(neg_vols))
+                print(len(neg_stabs))
 
                 fig, axs = plt.subplots(1,2,layout='constrained')
 
@@ -2669,7 +2491,280 @@ class LearningRate_Analysis:
         return
 
 
+
+    def plot_learning_rate_dual_hists_new(self, learning_rate_df, neuron_type_df, suptitle, fig_folder):
     
+        cols = learning_rate_df.columns
+        # areas = AREAS + ['all areas']
+        areas = AREAS
+        # cols = ['Learning Rate for Qchosen']
+    
+        value_cols = list(np.unique([self._strip_sign_prefix(c) for c in cols if 'Q' in c]))
+        value_cols.append('Qoffer') #to combine Q1 and Q2
+    
+        for i, area in enumerate(areas):
+    
+            # area_neuron_type_df = utils.area_parser(neuron_type_df, area)
+            area_learning_rate_df = utils.area_parser(learning_rate_df, area)
+    
+            print(area)
+            if area_learning_rate_df.empty:
+                print('skipped!')
+                continue
+    
+            unique_units = utils.get_unique_units(area_learning_rate_df["Unit"], SUBSESSIONS)
+    
+            for col in value_cols:
+                print(col)
+                if col != 'Qoffer':
+                    col_noprefix = col.removeprefix('Learning Rate for ')
+        
+                    pos_vols, pos_stabs = self._collect_pairs(f'Pos {col}',unique_units,area_learning_rate_df)
+                    neg_vols, neg_stabs = self._collect_pairs(f'Neg {col}',unique_units,area_learning_rate_df)
+                
+                elif col == 'Qoffer':
+                    col_noprefix = 'Qoffer'
+                    
+                    #Q1
+                    col = 'Learning Rate for Q1'
+                    pos_vols1, pos_stabs1 = self._collect_pairs(f'Pos {col}',unique_units,area_learning_rate_df)
+                    neg_vols1, neg_stabs1 = self._collect_pairs(f'Neg {col}',unique_units,area_learning_rate_df)
+                    
+                    #Q2
+                    col = 'Learning Rate for Q2'
+                    pos_vols2, pos_stabs2 = self._collect_pairs(f'Pos {col}',unique_units,area_learning_rate_df)
+                    neg_vols2, neg_stabs2 = self._collect_pairs(f'Neg {col}',unique_units,area_learning_rate_df)
+                    
+                    pos_vols = pos_vols1 + pos_vols2
+                    neg_vols = neg_vols1 + neg_vols2
+                    pos_stabs = pos_stabs1 + pos_stabs2
+                    neg_stabs = neg_stabs1 + neg_stabs2
+                    
+                    col = 'Learning Rate for Qoffer'
+    
+                # Skip if neither sign has data.
+                if len(pos_vols)==0 and len(neg_vols)==0:
+                    continue
+                
+                #calculate win-bias 
+                winbias_vols = np.array(pos_vols) - np.array(neg_vols)
+                winbias_stabs = np.array(pos_stabs) - np.array(neg_stabs)
+                winbias_change = winbias_vols - winbias_stabs
+                
+                ## LR Histograms fig
+                fig,axs = plt.subplots(1,2,layout='constrained')
+                
+                ## Pos LR
+                ax=axs[0]
+                #stats
+                # print('-'*25)
+                # print('Pos LR: volatile vs stable')
+                # print(col)
+                # print(area)
+                res = sp.stats.ttest_ind(pos_stabs, pos_vols, equal_var=True)
+                # print(res)
+                #hists
+                ax.hist(pos_vols,label=f'volatile, n={len(pos_vols)}',bins=20,range=(0,1),alpha=0.5,color='tab:blue',orientation='horizontal')
+                ax.hist(pos_stabs,label=f'stable, n={len(pos_stabs)}',bins=20,range=(0,1),alpha=0.5,color='tab:orange',orientation='horizontal')
+                #mean markers
+                y_max1 = np.max(np.histogram(pos_vols,bins=20,range=(0,1))[0])
+                y_max2 = np.max(np.histogram(pos_stabs,bins=20,range=(0,1))[0])
+                y_max = np.max([y_max1,y_max2])
+                ax.plot(y_max,np.mean(pos_vols),marker='<',color='tab:blue')
+                ax.plot(y_max,np.mean(pos_stabs),marker='<',color='tab:orange')
+                #plot details
+                ax.set_title(f'Positive LR Hist\np={res.pvalue:.4f}')
+                ax.set_xlabel('Number of neurons')
+                ax.set_ylabel('Learning Rate')
+                ax.legend()
+                
+
+                ## Neg LR
+                ax=axs[1]
+                #stats
+                # print('-'*25)
+                # print('Neg LR: volatile vs stable')
+                # print(col)
+                # print(area)
+                res = sp.stats.ttest_ind(neg_stabs, neg_vols, equal_var=True)
+                # print(res)
+                #hists
+                ax.hist(neg_vols,label=f'volatile, n={len(neg_vols)}',bins=20,range=(0,1),alpha=0.5,color='tab:blue',orientation='horizontal')
+                ax.hist(neg_stabs,label=f'stable, n={len(neg_stabs)}',bins=20,range=(0,1),alpha=0.5,color='tab:orange',orientation='horizontal')
+                #mean markers
+                y_max1 = np.max(np.histogram(neg_vols,bins=20,range=(0,1))[0])
+                y_max2 = np.max(np.histogram(neg_stabs,bins=20,range=(0,1))[0])
+                y_max = np.max([y_max1,y_max2])
+                ax.plot(y_max,np.mean(neg_vols),marker='<',color='tab:blue')
+                ax.plot(y_max,np.mean(neg_stabs),marker='<',color='tab:orange')
+                #plot details
+                ax.set_title(f'Negative LR Hist\np={res.pvalue:.4f}')
+                ax.set_xlabel('Number of neurons')
+                # ax.set_ylabel('Negative Learning Rate')
+                ax.legend()
+
+                fig.suptitle(suptitle + f'\n{col_noprefix} - {area}')
+
+                utils.save_svg(
+                    fig,
+                    f'{suptitle}_{area}_{col_noprefix}_LRhists',
+                    fig_folder,
+                    PROJ_FOLDER,
+                )
+                
+                
+                ## Win-bias fig
+                fig,axs = plt.subplots(1,2,layout='constrained')
+                
+                ## Win-bias hist
+                ax=axs[0]
+                #stats
+                # print('-'*25)
+                # print('Win-Bias: volatile vs stable')
+                # print(col)
+                # print(area)
+                res = sp.stats.ttest_ind(winbias_stabs, winbias_vols, equal_var=True)
+                # print(res)
+                #hists
+                ax.hist(winbias_vols,label=f'volatile, n={len(winbias_vols)}',bins=20,range=(-1,1),alpha=0.5,color='tab:blue',orientation='horizontal')
+                ax.hist(winbias_stabs,label=f'stable, n={len(winbias_stabs)}',bins=20,range=(-1,1),alpha=0.5,color='tab:orange',orientation='horizontal')
+                #mean markers
+                y_max1 = np.max(np.histogram(winbias_vols,bins=20,range=(-1,1))[0])
+                y_max2 = np.max(np.histogram(winbias_stabs,bins=20,range=(-1,1))[0])
+                y_max = np.max([y_max1,y_max2])
+                ax.plot(y_max,np.mean(winbias_vols),marker='<',color='tab:blue')
+                ax.plot(y_max,np.mean(winbias_stabs),marker='<',color='tab:orange')
+                #plot details
+                ax.set_title(f'Win-Bias Hist\np={res.pvalue:.4f}')
+                ax.set_xlabel('Number of neurons')
+                ax.set_ylabel('Win-Bias\n(Pos LR - Neg LR)')
+                ax.legend()
+                
+                
+                ## Delta Win-bias hist
+                ax=axs[1]
+                # print('-'*25)
+                # print('Delta Win-Bias: volatile - stable vs 0')
+                # print(col)
+                # print(area)
+                res = sp.stats.ttest_1samp(winbias_change, 0)
+                # print(res)
+                #histogram
+                ax.hist(winbias_change,label=f'volatile-stable\nn={len(winbias_change)}',bins=20,range=(-2,2),alpha=0.5,color='tab:pink',orientation='horizontal')
+                #mean marker
+                y_max = np.max(np.histogram(winbias_change,bins=40,range=(-2,2))[0])
+                ax.plot(y_max,np.mean(winbias_change),marker='<',color='tab:pink')
+                ax.plot([0,y_max],[0,0],'--k')
+                #plot details
+                ax.set_title(f'Change in Win-Bias Hist\np={res.pvalue:.4f}')
+                ax.set_xlabel('Number of neurons')
+                ax.set_ylabel('Delta Win-Bias\n(Volatile - Stable)')
+                ax.legend()
+
+                fig.suptitle(suptitle + f'\n{col_noprefix} - {area}')
+                
+    
+                utils.save_svg(
+                    fig,
+                    f'{suptitle}_{area}_{col_noprefix}_winbiashists',
+                    fig_folder,
+                    PROJ_FOLDER,
+                )
+                
+                
+        return
+
+    def plot_learning_rate_single_hists_new(self, learning_rate_df, neuron_type_df, suptitle, fig_folder):
+    
+        cols = learning_rate_df.columns
+        
+        assert 'Pos Learning Rate for Q1' not in cols, 'Dual LR data loaded instead of single LR!'
+        
+        # areas = AREAS + ['all areas']
+        areas = AREAS
+        # cols = ['Learning Rate for Qchosen']
+    
+        value_cols = list(np.unique([c for c in cols if 'Q' in c]))
+        value_cols.append('Qoffer') #to combine Q1 and Q2
+    
+        for i, area in enumerate(areas):
+    
+            # area_neuron_type_df = utils.area_parser(neuron_type_df, area)
+            area_learning_rate_df = utils.area_parser(learning_rate_df, area)
+    
+            print(area)
+            if area_learning_rate_df.empty:
+                print('skipped!')
+                continue
+    
+            unique_units = utils.get_unique_units(area_learning_rate_df["Unit"], SUBSESSIONS)
+    
+            for col in value_cols:
+                print(col)
+                if col != 'Qoffer':
+                    col_noprefix = col.removeprefix('Learning Rate for ')
+        
+                    vols, stabs = self._collect_pairs(col,unique_units,area_learning_rate_df)
+                    
+                elif col == 'Qoffer':
+                    col_noprefix = 'Qoffer'
+                    
+                    #Q1
+                    col = 'Learning Rate for Q1'
+                    vols1, stabs1 = self._collect_pairs(col,unique_units,area_learning_rate_df)
+                    #Q2
+                    col = 'Learning Rate for Q2'
+                    vols2, stabs2 = self._collect_pairs(col,unique_units,area_learning_rate_df)
+                    
+                    vols = vols1 + vols2
+                    stabs = stabs1 + stabs2
+                    
+                    col = 'Learning Rate for Qoffer'
+    
+                # Skip if neither has data.
+                if len(vols)==0 and len(vols)==0:
+                    continue
+                
+                ## LR Histograms fig
+                fig,ax = plt.subplots(layout='constrained')
+                
+
+                #stats
+                # print('-'*25)
+                # print('Pos LR: volatile vs stable')
+                # print(col)
+                # print(area)
+                res = sp.stats.ttest_ind(stabs, vols, equal_var=True)
+                # print(res)
+                #hists
+                ax.hist(vols,label=f'volatile, n={len(vols)}',bins=20,range=(0,1),alpha=0.5,color='tab:blue')
+                ax.hist(stabs,label=f'stable, n={len(stabs)}',bins=20,range=(0,1),alpha=0.5,color='tab:orange')
+                #mean markers
+                y_max1 = np.max(np.histogram(vols,bins=20,range=(0,1))[0])
+                y_max2 = np.max(np.histogram(stabs,bins=20,range=(0,1))[0])
+                y_max = np.max([y_max1,y_max2])
+                ax.plot(np.mean(vols),y_max,marker='v',color='tab:blue')
+                ax.plot(np.mean(stabs),y_max,marker='v',color='tab:orange')
+                #plot details
+                ax.set_title(f'Single LR Hist\np={res.pvalue:.4f}')
+                ax.set_ylabel('Number of neurons')
+                ax.set_xlabel('Learning Rate')
+                ax.legend()
+                
+
+
+                fig.suptitle(suptitle + f'\n{col_noprefix} - {area}')
+
+                utils.save_svg(
+                    fig,
+                    f'{suptitle}_{area}_{col_noprefix}_LRhists_single',
+                    fig_folder,
+                    PROJ_FOLDER,
+                )
+                
+                
+                
+        return    
     
     def plot_winbias_hist(self, learning_rate_df, neuron_type_df, suptitle, fig_folder):
     
@@ -3004,8 +3099,8 @@ class NeuronType_Analysis:
         
         return
     
-    
-    def get_neuron_types(self,fr_df,behavior_df):
+    @staticmethod
+    def get_neuron_types(fr_df,behavior_df):
         coefs=[]
         encodings = []
         unit_labels = []
@@ -3419,11 +3514,244 @@ class DualVsSingleAlpha_Analysis:
         return rsqrs
 
 
-class BehaviorLearningRates:
 
+class SubsessionVsFR_Analysis:
+    
+    def __init__(self):
+    
+        fr_dicts = {} #each item in dict is a list of subsession fr for a unit
+        raw_fr_dicts = {} #each item in dict is a list of subsession fr for a unit
+        for s, session in enumerate(SESSIONS):
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s, session)
+            
+            units = Spikes.fr_df.columns
+            for unit in units:
+            
+                fr_dicts[unit] = []
+                raw_fr_dicts[unit] = []
+                for subsession in SUBSESSIONS:
+                    trials = utils.get_trials(Behav.behavior_df,subsession)
+                    
+                    raw_fr = Spikes.raw_fr_df[unit].iloc[trials] #vector of FRs for subsession trials
+                    raw_fr_dicts[unit].append(np.mean(raw_fr))
+                    
+                    fr = Spikes.fr_df[unit].iloc[trials] #vector of FRs for subsession trials
+                    fr_dicts[unit].append(np.mean(fr))
+       
+        self.plot_paired_frs(fr_dicts,'Z-scored FR')
+        self.plot_paired_frs(raw_fr_dicts,'Raw FR')
+            
+        return
+    
+    def plot_paired_frs(self,fr_dicts,title):
+        print('\n\n')
+        print(title)
+        fig,ax=plt.subplots(layout='constrained')
+        
+        units = fr_dicts.keys()
+        
+        #paired dots
+        for unit in units:
+            ax.plot(fr_dicts[unit],'o-',alpha=0.2)
+            
+        # mean and sem
+        fr_list=[]
+        for i,subsession in enumerate(SUBSESSIONS):
+            frs_subsess = [frs[i] for frs in fr_dicts.values()] #itr thru units and get fr for current subsess
+            avg,sem = utils.get_avg_sem(frs_subsess,axis=0)
+            fr_list.append(frs_subsess)
+            
+            ax.errorbar(i,avg,yerr=sem,color='k')
+            
+            print('-'*15)
+            print(subsession)
+            print(f'Avg +/- sem FR: {avg:.4f} +/- {sem:.4f}')
+            
+        print('-'*15)
+        print('Stable vs Volatile')
+        res = sp.stats.ttest_ind(fr_list[1], fr_list[2], equal_var=True)
+        print(res)
+            
+        ax.set_xticks(np.arange(len(SUBSESSIONS)),SUBSESSIONS)
+        ax.set_ylabel('Avg FR')
+        ax.set_title(f'FR for each unit for each subsession\nn={len(units)}')
+        fig.suptitle(title)
+            
+        
+        return
+
+
+
+class Behavior_Analysis:
     def __init__(self):
         return
 
+    @staticmethod
+    def value_dists():
+        df_list = []
+        for s, session in enumerate(SESSIONS):
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s, session)
+
+            #for plotting single sess results
+            # Behav.plot_values(save_flag=False)
+            # Behav.plot_value_dist(save_flag=False) #good for exemplar plots
+
+            df_list.append(Behav.behavior_df)
+
+        print(f'len df_list: {len(df_list)}')
+        Behavior_Analysis.plot_value_dist(df_list)
+
+        return
+    
+    @staticmethod
+    def plot_value_dist(behavior_df_list):
+
+        combined_df = utils.merge_sessions_df(behavior_df_list)
+
+        def get_values_rewprob_volatility(df, stable_or_volatile, rew_prob):
+            if 'Q1' in df.columns:
+                trials = utils.get_trials_rewprob_volatility(df, stable_or_volatile, rew_prob)
+                Q1 = df['Q1'].iloc[trials]
+            else:
+                Q1 = np.full(len(df), np.nan)
+
+            if 'Q2' in df.columns:
+                trials = utils.get_trials_rewprob_volatility(df, stable_or_volatile,
+                                                             1 - rew_prob)  # do 1 minus rew prob since this is for targ 2
+                Q2 = df['Q2'].iloc[trials]
+            else:
+                Q2 = np.full(len(df), np.nan)
+
+            if 'Qchosen' in df.columns:
+                trials = utils.get_trials_rewprob_volatility_Qchosen(df, stable_or_volatile,rew_prob)
+                Qch = df['Qchosen'].iloc[trials]
+            else:
+                Qch = np.full(len(df), np.nan)
+                
+            return np.concatenate([Q1, Q2])
+            # return Qch
+
+        ## Histogram plots
+        bins = np.linspace(0.0, 1.0, num=20)
+        
+        def plot_valuedist_hist(rewprobs,rewprob_labels):
+            
+            fig, ax = plt.subplots(layout='constrained')
+            for i, stable_or_volatile in enumerate(SUBSESSIONS[1:]):
+                for ii, rew_prob in enumerate(rewprobs):
+                    values = get_values_rewprob_volatility(combined_df, stable_or_volatile, rew_prob)
+                    ax.hist(values, density=True, bins=bins, histtype='step',
+                            label=stable_or_volatile, linestyle=LINESTYLES[i], color=COLORS[ii])
+            ax.legend()
+            ax.set_ylabel('Density')
+            ax.set_xlabel('Subjective Value')
+            ax.set_title(f'Target Reward Probabilities: {rewprob_labels}')
+            return
+        
+        plot_valuedist_hist([0.,1.],'0/1') # rewprob = 0/1 plot
+        plot_valuedist_hist([0.2,0.8],'0.2/0.8') # rewprob = 0.2/0.8 plot
+        plot_valuedist_hist([0.4,0.6],'0.4/0.6') # rewprob = 0.4/0.6 plot
+        
+
+        ## Variance Bar plots
+        vars_df = {'RewProb': [], 'StableOrVolatile': [], 'Variance': []}
+        ylims = 0, 0.1
+        colors = ['darkgray', 'dimgray']
+        
+        def plot_valuedist_var_bar(rewprobs,rewprob_labels):
+            fig, ax = plt.subplots(layout='constrained')
+            handles = []
+            for i, stable_or_volatile in enumerate(SUBSESSIONS[1:]):
+                for ii, rew_prob in enumerate(rewprobs):
+                    vars_ = []
+                    for behavior_df in behavior_df_list:  # loop thru all sessions individually
+                        values = get_values_rewprob_volatility(behavior_df, stable_or_volatile, rew_prob)
+                        if len(values) > 0:
+                            var = np.nanvar(values)
+                            vars_.append(var)
+                            vars_df['RewProb'].append(rew_prob)
+                            vars_df['StableOrVolatile'].append(stable_or_volatile)
+                            vars_df['Variance'].append(var)
+
+                    avg, sem = utils.get_avg_sem(vars_, axis=0)
+                    # print(vars_)
+                    # print(avg)
+                    # print(sem)
+                    ax.bar(i + (ii * 2.5), avg, label=stable_or_volatile, color=colors[i])
+                    ax.errorbar(i + (ii * 2.5), avg, sem, ecolor='k', color='k')
+                patch = mpatches.Patch(color=colors[i], label=stable_or_volatile)
+                handles.append(patch)
+
+            ax.legend(handles=handles)
+            ax.set_ylabel('Value Distribution Variance')
+            ax.set_xticks([0.5, 3.0], [f'Rew Prob: {rewprobs[0]}', f'Rew Prob: {rewprobs[1]}'])
+            ax.set_title(f'Target Reward Probabilities: {rewprob_labels}\nn={len(vars_)}')
+            ax.set_ylim(ylims)
+            return
+
+        # rewprob = 0/1 plot
+        plot_valuedist_var_bar([0.,1.],'0/1') # rewprob = 0/1 plot
+        plot_valuedist_var_bar([0.2,0.8],'0.2/0.8') # rewprob = 0.2/0.8 plot
+        plot_valuedist_var_bar([0.4,0.6],'0.4/0.6') # rewprob = 0.4/0.6 plot
+        
+
+        ## Stats
+
+        # 2way ANOVAs
+        vars_df = pd.DataFrame.from_dict(vars_df)
+        vars_df['StableOrVolatile'] = vars_df['StableOrVolatile'].astype('category')
+
+        # print('High Value')
+        # hv_df = vars_df.loc[vars_df['RewProb'] > 0.5]
+        # model = sm_api.ols('Variance ~ C(RewProb) + C(StableOrVolatile) + C(RewProb):C(StableOrVolatile)',
+        #                    data=hv_df).fit()
+        # anova_result = sm.stats.anova_lm(model, typ=2)
+        # print(anova_result)
+
+        # print('\n\nLow Value')
+        # lv_df = vars_df.loc[vars_df['RewProb'] < 0.5]
+        # model = sm_api.ols('Variance ~ C(RewProb) + C(StableOrVolatile) + C(RewProb):C(StableOrVolatile)',
+        #                    data=lv_df).fit()
+        # anova_result = sm.stats.anova_lm(model, typ=2)
+        # print(anova_result)
+
+        # T-Tests
+        for rew_prob in [0., 0.2, 0.4, 0.6, 0.8, 1.]:
+            print(f'\n\nRewProb={rew_prob}  Stable vs Volatile')
+            #get data
+            stab_df = vars_df.loc[
+                (vars_df['RewProb'] == rew_prob) & (vars_df['StableOrVolatile'] == SUBSESSIONS[1])]
+            vol_df = vars_df.loc[
+                (vars_df['RewProb'] == rew_prob) & (vars_df['StableOrVolatile'] == SUBSESSIONS[2])]
+            
+            #T-test
+            res = sp.stats.ttest_ind(stab_df['Variance'].values, vol_df['Variance'].values, equal_var=True)
+            print(res)
+            
+            
+        # ANOVAs    
+        for rew_probs in [(0.,1.), (0.2,0.8), (0.4,0.6)]:
+            print(f'\n\nRewProbs={rew_probs}  Stable vs Volatile') 
+            #get data
+            stab_df1 = vars_df.loc[
+                (vars_df['RewProb'] == rew_probs[0]) & (vars_df['StableOrVolatile'] == SUBSESSIONS[1])]
+            vol_df1 = vars_df.loc[
+                (vars_df['RewProb'] == rew_probs[0]) & (vars_df['StableOrVolatile'] == SUBSESSIONS[2])]
+            
+            stab_df2 = vars_df.loc[
+                (vars_df['RewProb'] == rew_probs[1]) & (vars_df['StableOrVolatile'] == SUBSESSIONS[1])]
+            vol_df2 = vars_df.loc[
+                (vars_df['RewProb'] == rew_probs[1]) & (vars_df['StableOrVolatile'] == SUBSESSIONS[2])]
+            
+            #ANOVA
+            model = sm_api.ols('Variance ~ C(RewProb) + C(StableOrVolatile) + C(RewProb):C(StableOrVolatile)',
+                               data=pd.concat([stab_df1,vol_df1,stab_df2,vol_df2])).fit()
+            anova_result = sm.stats.anova_lm(model, typ=2)
+            print(anova_result)
+
+        return
+    
+    
     @staticmethod
     def plot_behavior_learningrates_dual():
 
@@ -3526,10 +3854,8 @@ class BehaviorLearningRates:
         ax.set_ylim([-0.1,20])
         ax.set_ylabel('Beta')
         ax.tick_params(axis='x', labelrotation=45)
-
-        
-
         return
+
 
 
 
@@ -3639,6 +3965,323 @@ def filter_learning_rates(learning_rate_df,neuron_type_df):
                 
     return learning_rate_df    
 
+
+class PCA_Analysis:
+    
+    def __init__(self,overwrite_flag=False):#,pct_var_explained):
+        # assert pct_var_explained<=1., 'Express percent as a decimal! (e.g. 50%=0.5)'
+        # self.pct_var_explained = pct_var_explained
+        
+        self.min_num_units = 6
+        
+        self.overwrite_flag=overwrite_flag
+    
+        self.n_dims_dict = self.get_n_dims_scree()
+        
+        self.pcs_dfs_dict = self.get_PCs(self.n_dims_dict) #dict of dfs organized by session and area
+        
+        self.get_PCs_encoding_type()
+        
+        return
+    
+    def get_n_dims_scree(self):
+        
+        n_dims_dict=dict()
+        for s,session in enumerate(SESSIONS):
+            n_dims_dict[session]=dict()
+            
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            
+            for area in AREAS:
+                               
+                file_name = f'n_pca_dims_{area}'
+                
+                #load
+                if (not self.overwrite_flag) and utils.does_pkl_exist(file_name,session,DATA_FOLDER):
+                   n_dims_dict[session][area] = utils.load_pkl(file_name,session,DATA_FOLDER) #int
+               
+                #or compute and save
+                else:
+                    area_fr_df = utils.area_parser(Spikes.fr_df,area)
+                    n_units = len(area_fr_df.keys())
+                    if n_units < self.min_num_units:
+                        continue #skip if not enough units for this session and area
+                        
+                    # _ = self.get_PCs(area_fr_df,session)
+                    
+                    pca = sklearn.decomposition.PCA()
+                    pca = pca.fit(area_fr_df.values) #n_obs x n_components = n_trials x n_units
+                
+                
+                    ev = pca.explained_variance_ # n_components x 1
+                    nv = pca.noise_variance_ #float
+                    
+                    # Scree plot
+                    fig,ax=plt.subplots(layout='constrained')
+                    ax.plot(np.arange(len(ev))+1,ev*100,'o-',label='Components')
+                    ax.hlines(nv,1,len(ev),color='k',linestyle='--',label='Noise Variance')
+                    ax.set_xlabel('Principal Component #')
+                    ax.set_ylabel('Variance Explained')
+                    ax.set_title('Scree Plot')
+                    fig.suptitle(f'{session}\n{area}, {n_units} units')
+                    
+                    plt.show()
+                    
+                    n_dims = int(input("How many components to keep? "))
+                    n_dims_dict[session][area] = n_dims
+                    
+                    utils.save_pkl(n_dims,file_name,session,DATA_FOLDER)
+                    
+                    plt.close()
+            print(f'{s+1}/{len(SESSIONS)} sessions done.')
+                    
+                
+        return n_dims_dict
+    
+    def get_PCs(self,n_dims_dict):
+        
+        pcs_dfs_dict=dict()
+        for s,session in enumerate(SESSIONS):
+            pcs_dfs_dict[session]=dict()
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            
+            for area in AREAS:
+                
+                area_fr_df = utils.area_parser(Spikes.fr_df,area)
+                n_units = len(area_fr_df.keys())
+                if n_units < self.min_num_units:
+                    continue #skip if no units for this session and area
+       
+        
+                # Fit PCA model on all trials. 
+                # This defines the population manifold for the particular area (over the entire session)
+                pca = sklearn.decomposition.PCA()
+                pcs_arr = pca.fit_transform(area_fr_df.values) #n_obs x n_components = n_trials x n_units
+                num_pcs_to_keep = n_dims_dict[session][area]
+                comp_labels = [f'PC#{i+1} {session}' for i in range(num_pcs_to_keep)]
+                pcs_df = pd.DataFrame(pcs_arr[:,:num_pcs_to_keep],columns=comp_labels)
+                
+                pcs_dfs_dict[session][area] = pcs_df
+        
+        print('PCA done for all sessions!')
+        
+        return pcs_dfs_dict
+    
+    # def get_num_PCs_to_keep(self):
+    #     assert np.all( self.pca.explained_variance_ratio_ == np.sort(self.pca.explained_variance_ratio_,descending=True) )
+    #     cumul_var_explained = np.cumsum(self.pca.explained_variance_ratio_)
+    #     num_pcs_to_keep = sum(cumul_var_explained < self.pct_var_explained) + 1 #get all PCs needed to explain specified pct_var_explained
+        
+    #     return num_pcs_to_keep
+    
+    def get_PCs_encoding_type(self):
+        
+        for s,session in enumerate(SESSIONS):
+                
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            
+            for area in AREAS:
+                
+                try:
+                    pc_df = self.pcs_dfs_dict[session][area]
+                except KeyError: #skip if no neurons for area
+                    continue
+                
+                if not utils.does_csv_exist(f'PCA_EncodingTypes_{area}',session,DATA_FOLDER):
+                    pcs_encodingtype_df,_ = NeuronType_Analysis.get_neuron_types(pc_df,Behav.behavior_df)
+                    utils.save_csv(pcs_encodingtype_df,f'PCA_EncodingTypes_{area}',session,DATA_FOLDER)
+                    
+        return
+    
+    def _make_3level_counter_dict(self,list1,list2,list3):
+        # I tried a slicker way of doing this but it didn't work cuz they used the same pointers
+        
+        counter_dict = {}
+        for item1 in list1:
+            counter_dict[item1]={}
+            for item2 in list2:
+                counter_dict[item1][item2]={}
+                for item3 in list3:
+                    counter_dict[item1][item2][item3] = 0
+                    
+        return counter_dict 
+    
+    def _count_value_vs_other(self,df,encoding_str):
+        if encoding_str == 'Other': #i.e. not value
+           return sum(~df['Neuron Type'].str.contains('Q')) 
+        else: #value or any specific regressor
+            return sum(df['Neuron Type'].str.contains(encoding_str))
+            
+    
+    def count_eachPC_encoding_type(self):
+        
+        regressors = ['Qchosen','Q1','Q2','Other']
+        colors = ['aquamarine','mediumspringgreen','cyan','grey']       
+        PC_list = ['PC#1','PC#2','PC#3']
+        #initialize counters. 
+        counters_dict = self._make_3level_counter_dict(AREAS,PC_list,regressors)
+        
+        for s,session in enumerate(SESSIONS):
+            for area in AREAS:
+                
+                try:
+                    pcs_encodingtype_df = utils.load_csv(f'PCA_EncodingTypes_{area}',session,DATA_FOLDER)
+                except:
+                    continue
+               
+                for PC in PC_list:
+                    
+                    pc_df = pcs_encodingtype_df[pcs_encodingtype_df['Unit'].str.contains(PC)]
+                    if len(pc_df)<1:
+                        continue
+                   
+                    for regressor in regressors:
+                       
+                        n_type = self._count_value_vs_other(pc_df,regressor)
+                        counters_dict[area][PC][regressor] += n_type
+        self.plot_encoding_type(counters_dict,colors,suptitle='Encoding Types by PC')           
+        return counters_dict
+    
+    def count_allPCs_encoding_type(self):
+        
+        regressors = ['Qchosen','Q1','Q2','Other']
+        colors = ['aquamarine','mediumspringgreen','cyan','grey']
+
+        #initialize counters. 
+        counters_dict = self._make_3level_counter_dict(AREAS,SUBSESSIONS,regressors)
+        
+        for s,session in enumerate(SESSIONS):
+            for area in AREAS:
+                
+                try:
+                    pcs_encodingtype_df = utils.load_csv(f'PCA_EncodingTypes_{area}',session,DATA_FOLDER)
+                except:
+                    continue
+               
+                for subsession in SUBSESSIONS:
+                    
+                    subsession_df = pcs_encodingtype_df[pcs_encodingtype_df['Unit'].str.contains(subsession)]
+                   
+                    for regressor in regressors:
+                       
+                        n_type = self._count_value_vs_other(subsession_df,regressor)
+                        counters_dict[area][subsession][regressor] += n_type
+        self.plot_encoding_type(counters_dict,colors,suptitle='All PCs pooled: Encoding Types')           
+        return counters_dict
+    
+    def plot_encoding_type(self,counters_dict,colors,suptitle):
+        
+        for key1 in counters_dict.keys():
+            
+            fig,axs=plt.subplots(1,3,layout='constrained')
+            
+            for ss,key2 in enumerate(counters_dict[key1].keys()):
+                types = list(counters_dict[key1][key2].keys())
+                counts = list(counters_dict[key1][key2].values())
+                
+                if sum(counts)>0:
+                    ax=axs[ss]
+                    ax.pie(counts, labels=types,colors=colors, autopct='%1.0f%%')
+                    ax.set_title(f'{key2}')
+                
+            fig.suptitle(suptitle + f'\n{key1}')
+        return
+                
+    def get_PC_learning_rate(self):
+        
+        for s,session in enumerate(SESSIONS):
+            
+            for s,session in enumerate(SESSIONS):
+                
+                Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+                
+                for area in AREAS:
+                    
+                    learning_rate_df = LearningRate_Analysis.get_learning_rates(pcs_df,Behav,pcs_type_df,do_even_num_trials=True)
+                    utils.save_csv(learning_rate_df,f'PCA_LearningRates_{area}',session,DATA_FOLDER)
+        
+        return
+    
+    
+    
+    @staticmethod
+    def plot_PCA_trajs(list_of_sessions,num_trials_to_plot):
+        
+        color = 'blue'
+    
+        PCA = PCA_Analysis(overwrite_flag = False)
+        
+        for s,session in enumerate(SESSIONS):        
+            
+            if session not in list_of_sessions:
+                continue
+            
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            
+            for area in AREAS:
+                try:
+                    pcs_encodingtype_df = utils.load_csv(f'PCA_EncodingTypes_{area}',session,DATA_FOLDER)
+                    pcs_df = PCA.pcs_dfs_dict[session][area]
+                except:
+                    print(f'Skipping {session}, {area}!!')
+                    continue
+                
+                for pc in pcs_df.columns:
+                    
+                    encoding_type = str(utils.get_unit_data(pcs_encodingtype_df, f'{pc} - all trials', 'Neuron Type'))
+                    if "Q" not in encoding_type: #only do pcs that encode value
+                        continue
+                    
+                    label = f'{pc[:4]}, {encoding_type}' 
+                    assert session in pc
+                
+                    fig,ax = Behav.plot_specific_value_vs_rewprob(encoding_type,num_trials_to_plot=num_trials_to_plot,save_flag=False)
+                    ax2 = ax.twinx()
+                    ax2.plot(pcs_df[pc].iloc[:num_trials_to_plot],color=color,label=label)
+                    ax2.legend()
+                    ax2.set_ylabel('Z-scored pop activity',color=color)
+                    ax2.tick_params(axis='y', labelcolor=color)
+            
+        print('Plotting..')
+        return
+    
+    @staticmethod   
+    def get_rsqrs():
+
+        rsqrs_dict = {stable_or_volatile: [] for stable_or_volatile in SUBSESSIONS}
+        for s,session in enumerate(SESSIONS):
+            
+            start = time.time()
+            
+            print(session)
+            
+            
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            neuron_type_df = utils.load_csv('NeuronTypes',session,DATA_FOLDER)
+            learning_rate_df = utils.load_csv('LearningRatesSingle',session,DATA_FOLDER)
+            
+            for stable_or_volatile in SUBSESSIONS:
+            
+                rsqrs_sess = utils.get_rsqrs_from_LRs(stable_or_volatile, Spikes.fr_df, Behav, neuron_type_df, learning_rate_df, do_even_num_trials, REGRESSORS)
+                rsqrs_dict[stable_or_volatile] = rsqrs_dict[stable_or_volatile] + rsqrs_sess
+            
+            utils.get_time_left(start,s,len(SESSIONS)) 
+        
+        #get avgs and sem
+        avgs,sems=[],[]
+        for stable_or_volatile in SUBSESSIONS:
+            avg,sem = utils.get_avg_sem(rsqrs_dict[stable_or_volatile],axis=0)
+            avgs.append(avg)
+            sems.append(sem)
+            
+        fig,ax=plt.subplots(layout='constrained')
+        ax.bar(SUBSESSIONS,avgs,yerr=sems)
+        ax.set_ylabel('R-Squared')
+        ax.set_title('R-Squareds of neurons with fitted learning rates')
+        
+        return
+
+    
 
 def filter_dict_by_neurontype(dict_to_filter,neuron_type_df,neuron_type,subsession):
     
@@ -4330,242 +4973,6 @@ def spike_inclusion_sanity():
     
     return
 
-class SubsessionVsFR_Analysis:
-    
-    def __init__(self):
-    
-        fr_dicts = {} #each item in dict is a list of subsession fr for a unit
-        raw_fr_dicts = {} #each item in dict is a list of subsession fr for a unit
-        for s, session in enumerate(SESSIONS):
-            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s, session)
-            
-            units = Spikes.fr_df.columns
-            for unit in units:
-            
-                fr_dicts[unit] = []
-                raw_fr_dicts[unit] = []
-                for subsession in SUBSESSIONS:
-                    trials = utils.get_trials(Behav.behavior_df,subsession)
-                    
-                    raw_fr = Spikes.raw_fr_df[unit].iloc[trials] #vector of FRs for subsession trials
-                    raw_fr_dicts[unit].append(np.mean(raw_fr))
-                    
-                    fr = Spikes.fr_df[unit].iloc[trials] #vector of FRs for subsession trials
-                    fr_dicts[unit].append(np.mean(fr))
-       
-        self.plot_paired_frs(fr_dicts,'Z-scored FR')
-        self.plot_paired_frs(raw_fr_dicts,'Raw FR')
-            
-        return
-    
-    def plot_paired_frs(self,fr_dicts,title):
-        print('\n\n')
-        print(title)
-        fig,ax=plt.subplots(layout='constrained')
-        
-        units = fr_dicts.keys()
-        
-        #paired dots
-        for unit in units:
-            ax.plot(fr_dicts[unit],'o-',alpha=0.2)
-            
-        # mean and sem
-        fr_list=[]
-        for i,subsession in enumerate(SUBSESSIONS):
-            frs_subsess = [frs[i] for frs in fr_dicts.values()] #itr thru units and get fr for current subsess
-            avg,sem = utils.get_avg_sem(frs_subsess,axis=0)
-            fr_list.append(frs_subsess)
-            
-            ax.errorbar(i,avg,yerr=sem,color='k')
-            
-            print('-'*15)
-            print(subsession)
-            print(f'Avg +/- sem FR: {avg:.4f} +/- {sem:.4f}')
-            
-        print('-'*15)
-        print('Stable vs Volatile')
-        res = sp.stats.ttest_ind(fr_list[1], fr_list[2], equal_var=True)
-        print(res)
-            
-        ax.set_xticks(np.arange(len(SUBSESSIONS)),SUBSESSIONS)
-        ax.set_ylabel('Avg FR')
-        ax.set_title(f'FR for each unit for each subsession\nn={len(units)}')
-        fig.suptitle(title)
-            
-        
-        return
-
-
-
-class Behavior_Analysis:
-    def __init__(self):
-        return
-
-    @staticmethod
-    def value_dists():
-        df_list = []
-        for s, session in enumerate(SESSIONS):
-            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s, session)
-
-            #for plotting single sess results
-            # Behav.plot_values(save_flag=False)
-            # Behav.plot_value_dist(save_flag=False) #good for exemplar plots
-
-            df_list.append(Behav.behavior_df)
-
-        print(f'len df_list: {len(df_list)}')
-        Behavior_Analysis.plot_value_dist(df_list)
-
-        return
-    
-    @staticmethod
-    def plot_value_dist(behavior_df_list):
-
-        combined_df = utils.merge_sessions_df(behavior_df_list)
-
-        def get_values_rewprob_volatility(df, stable_or_volatile, rew_prob):
-            if 'Q1' in df.columns:
-                trials = utils.get_trials_rewprob_volatility(df, stable_or_volatile, rew_prob)
-                Q1 = df['Q1'].iloc[trials]
-            else:
-                Q1 = np.full(len(df), np.nan)
-
-            if 'Q2' in df.columns:
-                trials = utils.get_trials_rewprob_volatility(df, stable_or_volatile,
-                                                             1 - rew_prob)  # do 1 minus rew prob since this is for targ 2
-                Q2 = df['Q2'].iloc[trials]
-            else:
-                Q2 = np.full(len(df), np.nan)
-
-            if 'Qchosen' in df.columns:
-                trials = utils.get_trials_rewprob_volatility_Qchosen(df, stable_or_volatile,rew_prob)
-                Qch = df['Qchosen'].iloc[trials]
-            else:
-                Qch = np.full(len(df), np.nan)
-                
-            return np.concatenate([Q1, Q2])
-            # return Qch
-
-        ## Histogram plots
-        bins = np.linspace(0.0, 1.0, num=20)
-        
-        def plot_valuedist_hist(rewprobs,rewprob_labels):
-            
-            fig, ax = plt.subplots(layout='constrained')
-            for i, stable_or_volatile in enumerate(SUBSESSIONS[1:]):
-                for ii, rew_prob in enumerate(rewprobs):
-                    values = get_values_rewprob_volatility(combined_df, stable_or_volatile, rew_prob)
-                    ax.hist(values, density=True, bins=bins, histtype='step',
-                            label=stable_or_volatile, linestyle=LINESTYLES[i], color=COLORS[ii])
-            ax.legend()
-            ax.set_ylabel('Density')
-            ax.set_xlabel('Subjective Value')
-            ax.set_title(f'Target Reward Probabilities: {rewprob_labels}')
-            return
-        
-        plot_valuedist_hist([0.,1.],'0/1') # rewprob = 0/1 plot
-        plot_valuedist_hist([0.2,0.8],'0.2/0.8') # rewprob = 0.2/0.8 plot
-        plot_valuedist_hist([0.4,0.6],'0.4/0.6') # rewprob = 0.4/0.6 plot
-        
-
-        ## Variance Bar plots
-        vars_df = {'RewProb': [], 'StableOrVolatile': [], 'Variance': []}
-        ylims = 0, 0.1
-        colors = ['darkgray', 'dimgray']
-        
-        def plot_valuedist_var_bar(rewprobs,rewprob_labels):
-            fig, ax = plt.subplots(layout='constrained')
-            handles = []
-            for i, stable_or_volatile in enumerate(SUBSESSIONS[1:]):
-                for ii, rew_prob in enumerate(rewprobs):
-                    vars_ = []
-                    for behavior_df in behavior_df_list:  # loop thru all sessions individually
-                        values = get_values_rewprob_volatility(behavior_df, stable_or_volatile, rew_prob)
-                        if len(values) > 0:
-                            var = np.nanvar(values)
-                            vars_.append(var)
-                            vars_df['RewProb'].append(rew_prob)
-                            vars_df['StableOrVolatile'].append(stable_or_volatile)
-                            vars_df['Variance'].append(var)
-
-                    avg, sem = utils.get_avg_sem(vars_, axis=0)
-                    # print(vars_)
-                    # print(avg)
-                    # print(sem)
-                    ax.bar(i + (ii * 2.5), avg, label=stable_or_volatile, color=colors[i])
-                    ax.errorbar(i + (ii * 2.5), avg, sem, ecolor='k', color='k')
-                patch = mpatches.Patch(color=colors[i], label=stable_or_volatile)
-                handles.append(patch)
-
-            ax.legend(handles=handles)
-            ax.set_ylabel('Value Distribution Variance')
-            ax.set_xticks([0.5, 3.0], [f'Rew Prob: {rewprobs[0]}', f'Rew Prob: {rewprobs[1]}'])
-            ax.set_title(f'Target Reward Probabilities: {rewprob_labels}\nn={len(vars_)}')
-            ax.set_ylim(ylims)
-            return
-
-        # rewprob = 0/1 plot
-        plot_valuedist_var_bar([0.,1.],'0/1') # rewprob = 0/1 plot
-        plot_valuedist_var_bar([0.2,0.8],'0.2/0.8') # rewprob = 0.2/0.8 plot
-        plot_valuedist_var_bar([0.4,0.6],'0.4/0.6') # rewprob = 0.4/0.6 plot
-        
-
-        ## Stats
-
-        # 2way ANOVAs
-        vars_df = pd.DataFrame.from_dict(vars_df)
-        vars_df['StableOrVolatile'] = vars_df['StableOrVolatile'].astype('category')
-
-        # print('High Value')
-        # hv_df = vars_df.loc[vars_df['RewProb'] > 0.5]
-        # model = sm_api.ols('Variance ~ C(RewProb) + C(StableOrVolatile) + C(RewProb):C(StableOrVolatile)',
-        #                    data=hv_df).fit()
-        # anova_result = sm.stats.anova_lm(model, typ=2)
-        # print(anova_result)
-
-        # print('\n\nLow Value')
-        # lv_df = vars_df.loc[vars_df['RewProb'] < 0.5]
-        # model = sm_api.ols('Variance ~ C(RewProb) + C(StableOrVolatile) + C(RewProb):C(StableOrVolatile)',
-        #                    data=lv_df).fit()
-        # anova_result = sm.stats.anova_lm(model, typ=2)
-        # print(anova_result)
-
-        # T-Tests
-        for rew_prob in [0., 0.2, 0.4, 0.6, 0.8, 1.]:
-            print(f'\n\nRewProb={rew_prob}  Stable vs Volatile')
-            #get data
-            stab_df = vars_df.loc[
-                (vars_df['RewProb'] == rew_prob) & (vars_df['StableOrVolatile'] == SUBSESSIONS[1])]
-            vol_df = vars_df.loc[
-                (vars_df['RewProb'] == rew_prob) & (vars_df['StableOrVolatile'] == SUBSESSIONS[2])]
-            
-            #T-test
-            res = sp.stats.ttest_ind(stab_df['Variance'].values, vol_df['Variance'].values, equal_var=True)
-            print(res)
-            
-            
-        # ANOVAs    
-        for rew_probs in [(0.,1.), (0.2,0.8), (0.4,0.6)]:
-            print(f'\n\nRewProbs={rew_probs}  Stable vs Volatile') 
-            #get data
-            stab_df1 = vars_df.loc[
-                (vars_df['RewProb'] == rew_probs[0]) & (vars_df['StableOrVolatile'] == SUBSESSIONS[1])]
-            vol_df1 = vars_df.loc[
-                (vars_df['RewProb'] == rew_probs[0]) & (vars_df['StableOrVolatile'] == SUBSESSIONS[2])]
-            
-            stab_df2 = vars_df.loc[
-                (vars_df['RewProb'] == rew_probs[1]) & (vars_df['StableOrVolatile'] == SUBSESSIONS[1])]
-            vol_df2 = vars_df.loc[
-                (vars_df['RewProb'] == rew_probs[1]) & (vars_df['StableOrVolatile'] == SUBSESSIONS[2])]
-            
-            #ANOVA
-            model = sm_api.ols('Variance ~ C(RewProb) + C(StableOrVolatile) + C(RewProb):C(StableOrVolatile)',
-                               data=pd.concat([stab_df1,vol_df1,stab_df2,vol_df2])).fit()
-            anova_result = sm.stats.anova_lm(model, typ=2)
-            print(anova_result)
-
-        return
-
 def plot_behavior_new(session_to_plot=''):  
     '''
     session_to_plot parameter is optional to plot only a specific session
@@ -4591,74 +4998,6 @@ def plot_behavior_new(session_to_plot=''):
             Behav.plot_values_vs_rewards(num_targs=2,num_trials_to_plot=60,save_flag=False)
             
     return    
-
-def plot_behavior():
-    df_list =[]
-    # corr_list=[]
-    # aics_list=[]
-    # kurt_vol_list=[]
-    # kurt_stab_list=[]
-    for s,session in enumerate(SESSIONS):
-        
-        #choose which sessions to do
-        # if session == 'braz20260803_03_te2548':
-        if 1:
-            
-            # Behav = ProcessBehavior(session)
-            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-            
-            # Behav.check_all_behavior()
-            # Behav.plot_choices_and_rewards(save_flag=False)
-            # Behav.plot_values(save_flag=False)
-            # Behav.plot_choices(save_flag=False)
-            # Behav.plot_values_vs_choices_vs_rewprob(num_targs=1,num_trials_to_plot=60,save_flag=False)
-            # Behav.plot_values_vs_rewards(num_targs=1,num_trials_to_plot=60,save_flag=False)
-            # Behav.plot_values_vs_choices_vs_rewprob(num_targs=2,num_trials_to_plot=60,save_flag=False)
-            # Behav.plot_values_vs_rewards(num_targs=2,num_trials_to_plot=60,save_flag=False)
-            
-            ##see which q learning model fits the best
-            # vmc = ValueModelingClass()
-            # fig,ax,aics = vmc.plot_model_comparison(Behav.hdf_file, num_trials_A=0, num_trials_B=0)
-            # aics_list.append(aics)
-            
-            ##re get values using rishi's method
-            # Behav.get_behavior(Q_learning=True)
-            
-            ##analyze correlation of behavior variables
-            # list_of_vars = ['Q1','Q2','Choice1','Qhigh','Qlow','Qchosen','Qdiff_','absQdiff','Choice_high','Side','Time']
-            # corr = Behav.get_behavior_var_corr(list_of_vars)
-            # plot_var_corr(corr,list_of_vars,Behav.session)
-            # corr_list.append(corr)
-            
-            ##analyze distribution of values
-            # Behav.plot_values(save_flag=False)
-            # Behav.plot_value_dist(save_flag=False) #good for exemplar plots
-            # kurt_vol_list.append(kurt_vol)
-            # kurt_stab_list.append(kurt_stab)
-            # xxx
-            df_list.append(Behav.behavior_df)
-      
-    ##analyze distribution of values
-    # df = utils.merge_sessions_df(df_list)
-    plot_value_dist(df_list,save_flag=False)
-    
-    print(f'len df_list: {len(df_list)}')
-    
-    ##analyze correlation of behavior variables
-    # corr_list = np.array(corr_list)
-    # plot_var_corr(np.mean(corr_list,axis=0),list_of_vars,'Across Session Average')
-    
-    #shape aics_list = num_sess len list of dicts
-    
-    
-    # fig,ax = plt.subplots(layout='constrained')
-    # ax.bar(['volatile','stable'],[np.mean(kurt_vol_list),np.mean(kurt_stab_list)])
-    # ax.scatter(1*np.ones(len(kurt_vol_list)),kurt_vol_list)
-    # ax.scatter(2*np.ones(len(kurt_vol_list)),kurt_stab_list)
-    
-    
-    
-    return
 
 
 #### Load Data
@@ -4752,7 +5091,7 @@ def get_Spikes_Behav_LFP(s: int, session: str):
         LFP = ProcessLFP(session, verbose=False)
     return Spikes, Behav, LFP
 
-#%% Run!
+#%% Load data
 
 # SESSIONS = ["airp20251021_02_te2216"] #low units- test sesison
 LOAD_LFP = False
@@ -4760,6 +5099,8 @@ LOAD_SPIKES = True
 LOAD_BEHAV = True
 SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrite_lfp_flag=False,verbose=False)
 
+
+#%% Run!
 
 # lasso_param_gridsearch(lasso_or_ridge='ridge')
 
@@ -4781,33 +5122,39 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # behavior_checks()
 # behavior_checks_2()
 
-
+# PCA=PCA_Analysis(overwrite_flag=False)
+# _=PCA.count_allPCs_encoding_type()
+# _=PCA.count_eachPC_encoding_type()
+# PCA vs behavior
+# PCA_Analysis.plot_PCA_trajs(list_of_sessions=SESSIONS,num_trials_to_plot=200)
 
 # plot_behavior_new("braz20260824_03_te2584") # go to method and comment/uncomment plots you want to do
 
 
 # DvS = DualVsSingleAlpha_Analysis()
 # DvS.plot_rsqrs()
+# LearningRate_Analysis.get_rsqrs(do_even_num_trials=False)
 
 # run_tuning_curves()
 
 # VALUE_MODEL = 'Baseline'
-# BehaviorLearningRates.plot_behavior_learningrates_single()
+# Behavior_Analysis.plot_behavior_learningrates_single()
 # VALUE_MODEL = 'DualBaseline'
-# BehaviorLearningRates.plot_behavior_learningrates_dual()
+# Behavior_Analysis.plot_behavior_learningrates_dual()
 
-NT = NeuronType_Analysis(overwrite_flag=True)
+# NT = NeuronType_Analysis(overwrite_flag=True)
 #regression_rsqr_table()
 
 # # Calculate Learning Rates
 # LR = LearningRate_Analysis(overwrite_flag=True,do_even_num_trials=True
 # # Plot LRs
 # LR = LearningRate_Analysis(overwrite_flag=False)
-# # Subsession order control analyses
+# # # Subsession order control analyses
 # LR = LearningRate_Analysis(overwrite_flag=False,do_volatile_first_only=True)
 # LR = LearningRate_Analysis(overwrite_flag=False,do_stable_first_only=True)
 # Even number of trials control analysis
-# LR = LearningRate_Analysis(overwrite_flag=True,do_even_num_trials=True)
+LR = LearningRate_Analysis(overwrite_flag=False,do_even_num_trials=False)
+
 
 # TemporalAnalysis = Temporal_Analysis()
 # sessions = ["airp20251007_02_te2198","airp20250602_03_te2003","airp20260408_03_te2343"] #found by using units_by_session() and argmax
@@ -4833,7 +5180,8 @@ NT = NeuronType_Analysis(overwrite_flag=True)
 #     run_temporal_encodings_LFP()
 
 # if __name__ == "__main__":
-#    LR = LearningRate_Analysis(overwrite_flag=True)
+   # NT = NeuronType_Analysis(overwrite_flag=True)
+   # LR = LearningRate_Analysis(overwrite_flag=True)
 
 # if __name__ == "__main__":
 #    # run_dual_vs_single_alpha_rsqr()
@@ -4842,5 +5190,5 @@ NT = NeuronType_Analysis(overwrite_flag=True)
 
 
 
-s=SPIKES_LIST[0]
+# s=SPIKES_LIST[0]
 

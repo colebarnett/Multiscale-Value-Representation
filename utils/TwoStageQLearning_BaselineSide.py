@@ -45,6 +45,8 @@ def Calc_DistrQlearning_2Targs_BaselineSide(parameters, Q_initial, chosen_target
 			delta = float(rewards[i]) - Q_high[i]
 			Q_high[i+1] = Q_high[i] + alpha * delta
 			Q_low[i+1] = Q_low[i]  # Unchosen option unchanged
+            
+		assert ~np.isnan(Q_high[i+1]), f'Q_high[i]:{Q_high[i]}, alpha:{alpha}, delta:{delta}'
 
 		# Softmax decision rule with side bias (free-choice only)
 		if instructed_or_freechoice[i+1] == 2:

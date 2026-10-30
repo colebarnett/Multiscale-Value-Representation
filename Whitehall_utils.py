@@ -245,6 +245,111 @@ def simple_regression_best_rsqr(regressor_list,spikes,behavior_df):
         rsqr_list.append(res.rsquared)
         
     return max(rsqr_list)
+
+def find_best_learning_rate(fr_vector,Behavior,REGRESSORS,trials,learning_rates,alpha_thresh,unit_subsession_labeled,neuron_type):
+    ## Get regression weights for all learning rate combos
+    #loop thru all possible learning rates
+    df_rows_regression_weights = []
+    for pos_alpha in learning_rates:
+        for neg_alpha in learning_rates:
+        
+            # get beahvior according to current learning rates
+            Behavior.get_behavior(Q_learning=True, learning_rates=[pos_alpha,neg_alpha])
+            regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
+        
+            # regress fr against this learning rate behavior
+            res = linear_encoding_regression(fr_vector, regressor_matrix)
+        
+            row_dict_regression_weights = {'pos_alpha':pos_alpha, 'neg_alpha':neg_alpha} #each row of the df will be the lrs for each reg
+            # Get weights for each regressor
+            regressor_names = res.params.keys() #includes const in idx 0
+            
+            #loop thru all regressors
+            for j in range(len(regressor_names)):
+                if res.pvalues[regressor_names[j]] < alpha_thresh and res.f_pvalue < alpha_thresh: #if signif
+                    row_dict_regression_weights[regressor_names[j]] = abs(res.params.values[j]) #fill in the row of the df with param
+                else:
+                    row_dict_regression_weights[regressor_names[j]] = np.nan #if not signif, put in nan so it will get skipped
+            
+            df_rows_regression_weights.append(row_dict_regression_weights)
+    
+    # Organize regression weights for each learning rate into a df  
+    regression_weights_df = pd.DataFrame(df_rows_regression_weights)
+    # print(regression_weights_df)
+    # xxx
+    # utils.save_csv(regression_weights_df,'RegressionWeights',"debug",DATA_FOLDER)
+    
+    # Find learning rate combination which maximizes each regression weight
+    row_dict_learning_rates = {'Unit':unit_subsession_labeled}
+    for j in range(len(REGRESSORS)):
+        
+        #only do if this neuron was found to encode that regressor
+        if REGRESSORS[j] in neuron_type:
+        
+            if not np.all(np.isnan(regression_weights_df[REGRESSORS[j]])): #to catch if all regression weights are nan
+                # idx of max regression weight for current regressor
+                idx_max_regressor = regression_weights_df[REGRESSORS[j]].idxmax()
+                
+                # Find and store learning rate which corresponds to max regression weight
+                row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['pos_alpha'].iloc[idx_max_regressor]
+                row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['neg_alpha'].iloc[idx_max_regressor]
+        
+        else: #if all weights are nan
+            # Put in np.nan since its more consistent when saving and loading dfs
+            row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = np.nan
+            row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = np.nan
+
+    return row_dict_learning_rates
+
+
+def get_rsqrs_from_LRs(stable_or_volatile, fr_df, Behavior, neuron_type_df, learning_rate_df, do_even_num_trials, REGRESSORS):        
+
+    assert len(Behavior.behavior_df) == len(fr_df), 'Number of trials do not match!'
+    # num_trials = len(fr_df)
+    
+    if do_even_num_trials:
+        trials = get_trials_even_num(Behavior.behavior_df,stable_or_volatile)
+    else:
+        trials = get_trials(Behavior.behavior_df,stable_or_volatile)
+
+    if not len(trials) > 1: #if no trials for current subsession
+        print(f'No trials for {stable_or_volatile}. Skipping!')    
+        return
+
+    # Get FR for each neuron
+    units = fr_df.columns
+    
+    rsqrs = []
+
+    for i,unit in enumerate(units):
+
+        neuron_type = str(get_unit_data(neuron_type_df, f'{unit} - all trials', 'Neuron Type'))
+        if "Q" not in neuron_type:
+            continue
+        
+        #dual lrs
+        if f'Pos Learning Rate for {neuron_type}' in learning_rate_df.columns:
+            pos_learning_rate = float(get_unit_data(learning_rate_df, f'{unit} - all trials', f'Pos Learning Rate for {neuron_type}'))
+            neg_learning_rate = float(get_unit_data(learning_rate_df, f'{unit} - all trials', f'Neg Learning Rate for {neuron_type}'))
+            learning_rate = [pos_learning_rate,neg_learning_rate]
+        #single lr
+        else:
+            learning_rate = [float(get_unit_data(learning_rate_df, f'{unit} - all trials', f'Learning Rate for {neuron_type}'))]
+            
+        if np.any(np.isnan(learning_rate)): #skip units that don't have a fitted LR
+            continue
+           
+        # get beahvior according to  learning rates
+        Behavior.get_behavior(Q_learning=True, learning_rates=learning_rate)
+        regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
+        fr = fr_df[unit].iloc[trials] #vector of FRs for subsession trial
+        # regress fr against this learning rate behavior
+        res = utils.linear_encoding_regression(fr, regressor_matrix)
+
+        rsqrs.append(res.rsquared)
+        
+    return rsqrs
+
     
 def area_parser(df_or_dict,brain_area):
     

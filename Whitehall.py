@@ -76,14 +76,19 @@ from numpy.polynomial.polynomial import polyfit
 
 #### Libraries and Paths
 
+##Yi's desktop^M
+BMI_FOLDER = r"C:\Users\crb4972\bmi_python"
+PROJ_FOLDER = r"C:\Users\crb4972\Desktop\whitehall\whitehall\Multiscale-Value-Representation"
+DATA_FOLDER = r"E:\Whitehall\data"
+
 # PROJ_FOLDER = r"D:\Whitehall"
-PROJ_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis"
-BMI_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\bmi_python"
+# PROJ_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis"
+# BMI_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\bmi_python"
 # PROJ_FOLDER = r"F:\cole"
 # BMI_FOLDER = r"C:\Users\crb4972\Desktop\bmi_python"
 NS_FOLDER = os.path.join(BMI_FOLDER, 'riglib', 'ripple', 'pyns', 'pyns') #Neuroshare python
 NSX_FOLDER = os.path.join(BMI_FOLDER, 'riglib', 'blackrock')
-DATA_FOLDER = os.path.join(PROJ_FOLDER, 'data')
+# DATA_FOLDER = os.path.join(PROJ_FOLDER, 'data')
 
 # Add paths for necessary packages to search path
 sys.path.insert(1,BMI_FOLDER) 

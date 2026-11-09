@@ -267,31 +267,85 @@ SESSIONS = [
             # # "braz20261009_03_te2642", #too few trials (1041), excluded
             ]
 
-OFC_REGRESSORS = [
-              'Q1',
-              'Q2',
-              'Choice1',
-              # 'Qhigh',
-              'Qchosen',
-              # 'Qdiff_',
-              # 'absQdiff',
-              # 'Choice_high',
-              'Side',
-              'Time',
-              ]
+QCHOSEN_REGRESSORS = [
+                    # 'Q1',
+                    # 'Q2',
+                    # 'Qleft',
+                    # 'Qright',
+                    # 'Qhigh',
+                    # 'Qlow',
+                    'Qchosen',
+                    # 'Qdiff_',
+                    # 'absQdiff',
+                    'ChoiceTarg',
+                    'ChoiceExploit ⊥ Qch',
+                    'ChoiceSide',
+                    'Time',
+                    # 'Time x Time',
+                    # 'Log_Time',
+                    'State ⊥ Time',
+                    # 'RPE',
+                    # 'absRPE',
+                    # 'Prev_Reward',
+                    'Prev_Rew ⊥ Qch', #residualized to Qchosen since they are moderately correlate
+                    # 'Qch ⊥ Prev_Rew',     
+                    ]
 
-CD_REGRESSORS = [
-              'Qleft',
-              'Qright',
-              # 'Choice1',
-              # 'Qhigh',
-              # 'Qchosen',
-              # 'Qdiff_',
-              # 'absQdiff',
-              # 'Choice_high',
-              'Side',
-              'Time',
-              ]
+Q1_REGRESSORS = [
+                    'Q1',
+                    # 'Q2',
+                    # 'Qleft',
+                    # 'Qright',
+                    # 'Qhigh',
+                    # 'Qlow',
+                    # 'Qchosen',
+                    # 'Qdiff_',
+                    # 'absQdiff',
+                    'ChoiceTarg',
+                    'ChoiceExploit ⊥ Q1',
+                    'ChoiceSide',
+                    'Time',
+                    # 'Time x Time',
+                    # 'Log_Time',
+                    'State ⊥ Time',
+                    # 'RPE',
+                    # 'absRPE',
+                    # 'Prev_Reward',
+                    'Prev_Rew ⊥ Q1', #residualized for consistency
+                    # 'Qch ⊥ Prev_Rew',     
+                    ]
+
+Q2_REGRESSORS = [
+                    # 'Q1',
+                    'Q2',
+                    # 'Qleft',
+                    # 'Qright',
+                    # 'Qhigh',
+                    # 'Qlow',
+                    # 'Qchosen',
+                    # 'Qdiff_',
+                    # 'absQdiff',
+                    'ChoiceTarg',
+                    'ChoiceExploit ⊥ Q2',
+                    'ChoiceSide',
+                    'Time',
+                    # 'Time x Time',
+                    # 'Log_Time',
+                    'State ⊥ Time',
+                    # 'RPE',
+                    # 'absRPE',
+                    # 'Prev_Reward',
+                    'Prev_Rew ⊥ Q2', #residualized for consistency
+                    # 'Qch ⊥ Prev_Rew',     
+                    ]
+
+
+REGRESSOR_SUPERSET_DICT = {'Qchosen': QCHOSEN_REGRESSORS,
+                           'Q1': Q1_REGRESSORS,
+                           'Q2': Q2_REGRESSORS,}
+ALL_REGRESSORS = list(set().union(*REGRESSOR_SUPERSET)) #all unique regs
+
+
 
 REGRESSOR_COLORS = [
                     'lime',
@@ -922,6 +976,10 @@ class ProcessBehavior:
             assert np.all(is_stable_block==0) and np.all(is_volatile_block==1)
             
         
+        # construct State variable (-1 for stab, +1 for vol)
+        state = np.where(is_stable_block,-1,1)
+        
+        
         # Calculate value of targets throughout trials
         if Q_learning and learning_rates: #to do a specific learning rate (uses modified version of Rishi's method)
             beta=1 #beta doesn't matter since we are only interested in value here
@@ -944,16 +1002,15 @@ class ProcessBehavior:
         else: # do empirical value 
             [Q1,Q2], _ = behavior.CalcValue_2Targs(choices,rewards,win_sz=10,smooth=True)
         
-        # split choices for each targ into own variable    
-        Q1_choices = np.zeros_like(choices)
-        Q1_choices[choices==1] = 1 #1 if he chose Q1, 0 otherwise
-        Q2_choices = np.zeros_like(choices)
-        Q2_choices[choices==2] = 1 #1 if he chose Q2, 0 otherwise
+        # split choices for each targ into own variable  
+        Q1_choices = np.where(choices==1,1,0)
+        Q2_choices = np.where(choices==2,1,0)
+        choices_targ = np.where(choices==1,1,-1)
+        
         
         # make time regressor 
-        time = np.arange(len(choices))
-        time = np.log(time+1)
-        time -= np.mean(time) # to make centered at 0
+        time = np.linspace(0,1,len(choices))
+        log_time = np.log(time+1)
         
         # Calculate value difference between targets throughout trials
         Qdiff = Q1 - Q2
@@ -974,7 +1031,12 @@ class ProcessBehavior:
         # pos_rpe[pos_rpe<0] = 0 #for positive rpe, set all negative rpes to zero
         # neg_rpe[neg_rpe>0] = 0 #for negative rpe, set all positive rpes to zero        
         
-                   
+        # reward of prev trial, relevant for choice epoch
+        # prev reward for first trial doesnt exist, so I put 0.
+        # also need to chop off last elemnt from array to make lengths the same
+        # also make -1/1
+        prev_reward_temp =  np.concat([np.array([0]),rewards[:-1]])    
+        prev_reward = np.where(prev_reward_temp,1,-1)
                     
         # Split Q1 and Q2 into Qlow and Qhigh. Also do for choices
         Q1_is_low = Q1 < Q2
@@ -987,6 +1049,7 @@ class ProcessBehavior:
         chose_low = Q1_is_low == chose_Q1
         Qlow_choices = chose_low.astype(Q1.dtype)
         Qhigh_choices = (~chose_low).astype(Q2.dtype)
+        choices_high = np.where(Qhigh_choices,1,-1)
         
 
         # Split Q1 and Q2 into Qchosen and Qunchosen            
@@ -1008,9 +1071,20 @@ class ProcessBehavior:
              'Qchosen':Q_chosen,            'Qunchosen':Q_unchosen,
              'Qright':Q_R,                  'Qleft':Q_L,
              'Choice_low':Qlow_choices,  'Choice_high':Qhigh_choices,
-             'Reward':rewards, 'RPE':rpe, 'Side':choice_side, 'Time':time,
+             'Reward':rewards, 'Prev_Reward':prev_reward, 
+             'Prev_Rew ⊥ Qch':utils.residualize(prev_reward,Q_chosen),
+             'Prev_Rew ⊥ Q1':utils.residualize(prev_reward,Q1),
+             'Prev_Rew ⊥ Q2':utils.residualize(prev_reward,Q2),
+             'Qch ⊥ Prev_Rew':utils.residualize(Q_chosen,prev_reward),
+             'RPE':rpe, 'absRPE':abs(rpe), 
+             'ChoiceSide':choice_side, 'ChoiceTarg':choices_targ, 'ChoiceExploit':choices_high,
+             'ChoiceExploit ⊥ Qch':utils.residualize(choices_high,Q_chosen),
+             'ChoiceExploit ⊥ Q1':utils.residualize(choices_high,Q1),
+             'ChoiceExploit ⊥ Q2':utils.residualize(choices_high,Q2),
+             'Time':time, 'Log_Time':log_time,
              'Rew_prob_1':rew_probs_1, 'Rew_prob_2':rew_probs_2,
-             'Stable':is_stable_block, 'Volatile':is_volatile_block}) #, 'Stim':stim_holds})
+             'Stable':is_stable_block, 'Volatile':is_volatile_block, 
+             'State':state, 'State ⊥ Time':utils.residualize(state,time)}) #, 'Stim':stim_holds})
         
         self.num_trials = len(choices)
         
@@ -1441,11 +1515,18 @@ class ProcessBehavior:
         num_vars = len(list_of_vars)
         ind_vars = np.zeros((num_vars,self.num_trials))
         corr_matrix = np.zeros((num_vars,num_vars))
+        print('asdklfj')
         
         #gather behavioral vars from behavior df
         for i,var in enumerate(list_of_vars): 
-            ind_vars[i,:] = self.behavior_df[var].to_numpy()
             
+            if ' x ' not in var: #for single (non-interaction) regressors
+                ind_vars[i,:] = sp.stats.zscore(self.behavior_df[var].to_numpy())
+            if ' x ' in var: #for interaction terms
+                reg1,reg2 = var.split(sep=' x ')
+                interaction = self.behavior_df[reg1] * self.behavior_df[reg2]
+                ind_vars[i,:] = sp.stats.zscore(interaction.to_numpy())
+      
         # calculate pairwise corr between all combos of vairables
         for i in range(num_vars):
             for j in range(num_vars):
@@ -1455,6 +1536,23 @@ class ProcessBehavior:
         corr_matrix = np.multiply(corr_matrix,corr_matrix) #make it r squared
         
         return corr_matrix
+    
+    @staticmethod
+    def plot_var_corr(corr_matrix,list_of_vars,title):
+        num_vars = len(list_of_vars)
+        fig,ax=plt.subplots(layout='constrained')
+        im = ax.imshow(corr_matrix,vmin=0.2,vmax=0.9,cmap='Reds')
+        ax.set_title('Behavior Variable Correlation (R^2)')
+        ax.set_aspect(0.9)#to make labels readable
+        c=plt.colorbar(im)
+        plt.xticks(range(num_vars),list_of_vars)
+        ax.tick_params(axis='x', labelrotation=90)
+        # for tick in ax.xaxis.get_major_ticks()[1::2]:
+        #     tick.set_pad(15) #
+        plt.yticks(range(num_vars),list_of_vars)
+        fig.suptitle(title)
+        
+        return fig
       
 
 class LearningRate_Analysis:
@@ -1481,31 +1579,33 @@ class LearningRate_Analysis:
                     continue #skip vol first
             
             
-            #Get encodings
-            try:
-                neuron_type_df = utils.load_csv('NeuronTypes',session,DATA_FOLDER)
-            except:
-                print('Need to run neuron typing first!')
-                return
+            # #Get encodings
+            # try:
+            #     neuron_type_df = utils.load_csv('NeuronTypes',session,DATA_FOLDER)
+            # except:
+            #     print('Need to run neuron typing first!')
+            #     return
             
             # Get learning rate for each unit
-            if not overwrite_flag and utils.does_csv_exist('LearningRatesSingle',session,DATA_FOLDER): #don't overwrite, load
-                learning_rate_df = utils.load_csv('LearningRatesSingle',session,DATA_FOLDER)
+            if not overwrite_flag and utils.does_csv_exist('LearningRates',session,DATA_FOLDER): #don't overwrite, load
+                learning_rate_df = utils.load_csv('LearningRates',session,DATA_FOLDER)
             else: #don't load, compute
                 Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-                learning_rate_df = self.get_learning_rates(Spikes.fr_df,Behav,neuron_type_df,self.do_even_num_trials)
-                utils.save_csv(learning_rate_df,'LearningRatesSingle',session,DATA_FOLDER)
+                learning_rate_df = self.get_learning_rates(Spikes.fr_df,Behav,self.do_even_num_trials)
+                utils.save_csv(learning_rate_df,'LearningRates',session,DATA_FOLDER)
+                print('*'*50)
+                print('*'*50)
+                utils.get_time_left(start,s,len(SESSIONS))
+                print('*'*50)
+                print('*'*50)
+                
             self.lr_dfs.append(learning_rate_df)
-            self.nt_dfs.append(neuron_type_df)
-            
-            utils.get_time_left(start,s,len(SESSIONS))
-            
-            
-             
+            # self.nt_dfs.append(neuron_type_df)
+       
         self.allsess_lr_df = utils.merge_sessions_df(self.lr_dfs)
-        self.allsess_nt_df = utils.merge_sessions_df(self.nt_dfs)
+        # self.allsess_nt_df = utils.merge_sessions_df(self.nt_dfs)
         utils.save_csv(self.allsess_lr_df,'LearningRates','',DATA_FOLDER)
-        utils.save_csv(self.allsess_nt_df,'NeuronTypes','',DATA_FOLDER)
+        # utils.save_csv(self.allsess_nt_df,'NeuronTypes','',DATA_FOLDER)
         
         if do_stable_first_only:
             suptitle = 'Stable to Volatile Sessions'
@@ -1519,7 +1619,7 @@ class LearningRate_Analysis:
         # Plot
         # self.plot_learning_rate_dual_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
         # self.plot_learning_rate_dual_hists_new(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        self.plot_learning_rate_single_hists_new(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_single_hists_new(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
         # self.plot_winbias_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
         # self.plot_learning_rate_scatter_1(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
         # self.plot_learning_rate_scatter_2(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
@@ -1569,15 +1669,14 @@ class LearningRate_Analysis:
 
     
     @staticmethod    
-    def get_learning_rates(fr_df,Behavior,neuron_type_df,do_even_num_trials):
+    def get_learning_rates(fr_df,Behavior,do_even_num_trials):
     
-        df_rows_learning_rates = []
         print(f'{len(fr_df.columns)} neurons')
         
+        df_rows_learning_rates = [] #to save out info in a df
         for stable_or_volatile in SUBSESSIONS:        
         
             assert len(Behavior.behavior_df) == len(fr_df), 'Number of trials do not match!'
-            # num_trials = len(fr_df)
             
             if do_even_num_trials:
                 trials = utils.get_trials_even_num(Behavior.behavior_df,stable_or_volatile)
@@ -1592,116 +1691,84 @@ class LearningRate_Analysis:
         
             # Get FR for each neuron
             units = fr_df.columns
-            # for i,unit in enumerate(units):
-            #     neuron_type = utils.get_unit_data(neuron_type_df,f'{unit} - {stable_or_volatile}','Neuron Type')
-            #     print(neuron_type)
-            #     print('Q' in neuron_type)
-            # xxx
             for i,unit in enumerate(units):
                 
                 start = time.time()
-                neuron_type = str(utils.get_unit_data(neuron_type_df, f'{unit} - all trials', 'Neuron Type'))
-                if "Q" not in neuron_type:
-                    continue
                 
                 fr = fr_df[unit].iloc[trials] #vector of FRs for subsession trial
                 
-                ## Get regression weights for all learning rate combos
-                #loop thru all possible learning rates
-                df_rows_regression_weights = []
+                ## Do regression for all learning rate combos
+                ## Keep regressor set and learning rate(s) that fit best
+                best_rsqr = 0.
+                best_learning_rate = None
+                neuron_type = None
                 
                 
-                # for alpha in LEARNING_RATES:
-
-                #     # get beahvior according to current learning rates
-                #     Behavior.get_behavior(Q_learning=True, learning_rates=[alpha])
-                #     regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
-
-                #     # regress fr against this learning rate behavior
-                #     res = utils.linear_encoding_regression(fr, regressor_matrix)
-
-                #     row_dict_regression_weights = {'alpha': alpha}  # each row of the df will be the lrs for each reg
-                #     # Get weights for each regressor
-                #     regressor_names = res.params.keys()  # includes const in idx 0
-
-                #     # loop thru all regressors
-                #     for j in range(len(regressor_names)):
-                #         if res.pvalues[
-                #             regressor_names[j]] < ALPHA_THRESHOLD and res.f_pvalue < ALPHA_THRESHOLD:  # if signif
-                #             row_dict_regression_weights[regressor_names[j]] = abs(
-                #                 res.params.values[j])  # fill in the row of the df with param
-                #         else:
-                #             row_dict_regression_weights[
-                #                 regressor_names[j]] = np.nan  # if not signif, put in nan so it will get skipped
-
-                #     df_rows_regression_weights.append(row_dict_regression_weights)
-                
-                
-                for pos_alpha in LEARNING_RATES:
-                    for neg_alpha in LEARNING_RATES:
-                    
+                if 'Dual' not in VALUE_MODEL: #single LR
+                    for alpha in LEARNING_RATES:
+    
                         # get beahvior according to current learning rates
-                        Behavior.get_behavior(Q_learning=True, learning_rates=[pos_alpha,neg_alpha])
-                        regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
-                    
-                        # regress fr against this learning rate behavior
-                        res = utils.linear_encoding_regression(fr, regressor_matrix)
-                    
-                        row_dict_regression_weights = {'pos_alpha':pos_alpha, 'neg_alpha':neg_alpha} #each row of the df will be the lrs for each reg
-                        # Get weights for each regressor
-                        regressor_names = res.params.keys() #includes const in idx 0
+                        Behavior.get_behavior(Q_learning=True, learning_rates=[alpha])
                         
-                        #loop thru all regressors
-                        for j in range(len(regressor_names)):
-                            if res.pvalues[regressor_names[j]] < ALPHA_THRESHOLD and res.f_pvalue < ALPHA_THRESHOLD: #if signif
-                                row_dict_regression_weights[regressor_names[j]] = abs(res.params.values[j]) #fill in the row of the df with param
-                            else:
-                                row_dict_regression_weights[regressor_names[j]] = np.nan #if not signif, put in nan so it will get skipped
-                        
-                        df_rows_regression_weights.append(row_dict_regression_weights)
-                
-                # Organize regression weights for each learning rate into a df  
-                regression_weights_df = pd.DataFrame(df_rows_regression_weights)
-                # print(regression_weights_df)
-                # xxx
-                # utils.save_csv(regression_weights_df,'RegressionWeights',"debug",DATA_FOLDER)
-                
-                # Find learning rate combination which maximizes each regression weight
-                unit_subsession_labeled = f'{unit} - {stable_or_volatile}'
-                row_dict_learning_rates = {'Unit':unit_subsession_labeled}
-                for j in range(len(REGRESSORS)):
-                    
-                    #only do if this neuron was found to encode that regressor
-                    if REGRESSORS[j] in neuron_type:
-                    
-                        if not np.all(np.isnan(regression_weights_df[REGRESSORS[j]])): #to catch if all regression weights are nan
-                            # idx of max regression weight for current regressor
-                            idx_max_regressor = regression_weights_df[REGRESSORS[j]].idxmax()
+                        # get set of regressors 
+                        for value_type,regressors in REGRESSOR_SUPERSET_DICT.items():
+                            regressor_matrix = Behavior.behavior_df[regressors].iloc[trials]
+        
+                            # regress fr against the behavior calculated for this learning rate and set of regressors
+                            res = utils.linear_encoding_regression(fr, regressor_matrix)
                             
-                            # Find and store learning rate which corresponds to max regression weight
-                            # row_dict_learning_rates['Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['alpha'].iloc[idx_max_regressor]
-                            row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['pos_alpha'].iloc[idx_max_regressor]
-                            row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = regression_weights_df['neg_alpha'].iloc[idx_max_regressor]
-                    
-                    else: #if all weights are nan
-                        # Put in np.nan since its more consistent when saving and loading dfs
-                        # row_dict_learning_rates['Learning Rate for ' + REGRESSORS[j]] = np.nan
-                        row_dict_learning_rates['Pos Learning Rate for ' + REGRESSORS[j]] = np.nan
-                        row_dict_learning_rates['Neg Learning Rate for ' + REGRESSORS[j]] = np.nan
-                    
-                df_rows_learning_rates.append(row_dict_learning_rates)
+                            # only consider if regression and value regressor are both significant
+                            if res.f_pvalue < ALPHA_THRESHOLD and res.pvalues[value_type] < ALPHA_THRESHOLD:
+                                
+                                # take lr and value type if it yields the best rsqr so far, otherwise continue on
+                                if res.rsquared > best_rsqr:
+                                    best_rsqr = res.rsquared
+                                    best_learning_rate = alpha
+                                    neuron_type = value_type
+                                    
+                    #save out info for unit
+                    lr_row_dict = {'Unit':f'{unit} - {stable_or_volatile}',
+                                   'Neuron Type': neuron_type,
+                                   'Learning Rate': best_learning_rate,
+                                   'R-Squared': best_rsqr}
+                    df_rows_learning_rates.append(lr_row_dict)
                 
-                # print(f'Unit {i+1}/{len(units)} for {stable_or_volatile}')
+                if 'Dual' in VALUE_MODEL: #dual LR
+                    for pos_alpha in LEARNING_RATES:
+                        for neg_alpha in LEARNING_RATES:
+                        
+                            # get beahvior according to current learning rates
+                            Behavior.get_behavior(Q_learning=True, learning_rates=[pos_alpha,neg_alpha])
+                            
+                            # get set of regressors 
+                            for value_type,regressors in REGRESSOR_SUPERSET_DICT.items():
+                                regressor_matrix = Behavior.behavior_df[regressors].iloc[trials]
+            
+                                # regress fr against the behavior calculated for this learning rate and set of regressors
+                                res = utils.linear_encoding_regression(fr, regressor_matrix)
+                                
+                                # only consider if regression and value regressor are both significant
+                                if res.f_pvalue < ALPHA_THRESHOLD and res.pvalues[value_type] < ALPHA_THRESHOLD:
+                                    
+                                    # take lr and value type if it yields the best rsqr so far, otherwise continue on
+                                    if res.rsquared > best_rsqr:
+                                        best_rsqr = res.rsquared
+                                        best_learning_rate = [pos_alpha,neg_alpha]
+                                        neuron_type = value_type
+                                        
+                    #save out info for unit
+                    lr_row_dict = {'Unit':f'{unit} - {stable_or_volatile}',
+                                   'Neuron Type': neuron_type,
+                                   'Pos Learning Rate': best_learning_rate[0],
+                                   'Neg Learning Rate': best_learning_rate[1],
+                                   'R-Squared': best_rsqr}
+                    df_rows_learning_rates.append(lr_row_dict)
+                    
                 utils.get_time_left(start,i,len(units))
-                
-                
+                                
         learning_rate_df = pd.DataFrame(df_rows_learning_rates) #rows: units x subsessions, cols: lrs for each reg
         # utils.save_csv(learning_rate_df,'LR',"debug",DATA_FOLDER)
-        # xxx
-        
-        #filter so that learning rates are only displayed for regressors that are encoded by that unit
-        # learning_rate_df = filter_learning_rates(learning_rate_df,neuron_type_df) not needed. filtering done by seeing if best regression passes alpha thresh
-    
+
         return learning_rate_df
 
     def _strip_sign_prefix(self,col):
@@ -3114,7 +3181,7 @@ class NeuronType_Analysis:
             for i,unit in enumerate(units): #loop thru all units of session
                 
                 # linear reg
-                signif_regressors = utils.linear_encoding_regression_feature_selection(
+                signif_regressors = utils.linear_encoding_regression_feature_selection_new(
                     REGRESSORS,fr_df[unit].iloc[trials],behavior_df.iloc[trials],ALPHA_THRESHOLD)
                 
                 # #data regularization
@@ -3971,7 +4038,7 @@ class PCA_Analysis:
         
         self.get_PCs_encoding_type()
         
-        self.get_PC_learning_rate()
+        # self.get_PC_learning_rate()
         
         return
     
@@ -4407,6 +4474,397 @@ def sliding_win_vs_trials(metric_arr,behavior_df,ax_title,sup_title,num_trials_s
 
 
 
+class Regressor_Analysis:
+    
+    def __init__(self):
+        
+        # set of all regressors, no interactions
+        # self.all_regs = [
+        #               'Q1',
+        #               'Q2',
+        #               'Qleft',
+        #               'Qright',
+        #               'Qhigh',
+        #               'Qlow',
+        #               'Qchosen',
+        #               'Qdiff_',
+        #               'absQdiff',
+        #               'ChoiceTarg',
+        #               'ChoiceExploit',
+        #               'ChoiceSide',
+        #               'Time',
+        #               # 'Time x Time',
+        #               # 'Log_Time',
+        #               'State',
+        #               'RPE',
+        #               'absRPE',
+        #               'Prev_Reward',
+        #               'Prev_Rew ⊥ Qch',
+        #               'Qch ⊥ Prev_Rew',
+        #               ]
+        
+        
+        # set of all regressors EXCEPT TIME, no interactions
+        # self.all_regs = [
+        #               'Q1',
+        #               'Q2',
+        #               'Qleft',
+        #               'Qright',
+        #               'Qhigh',
+        #               'Qlow',
+        #               'Qchosen',
+        #               'Qdiff_',
+        #               'absQdiff',
+        #               'ChoiceTarg',
+        #               'ChoiceExploit',
+        #               'ChoiceSide',
+        #               # 'Time',
+        #               # 'Log_Time',
+        #               # 'State',
+        #               'RPE',
+        #               ]
+    
+        
+        # value regressors with state (stable or vol) interactions
+        # self.all_regs = [
+        #               'Q1 x State',
+        #               'Q2 x State',
+        #               'Qleft x State',
+        #               'Qright x State',
+        #               'Qhigh x State',
+        #               'Qlow x State',
+        #               'Qchosen x State',
+        #               'Qdiff_ x State',
+        #               'absQdiff x State',
+        #               'RPE x State',
+        #               ]
+        
+        # value regressors with time interactions
+        # self.all_regs = [
+        #               'Q1 x Time',
+        #               'Q2 x Time',
+        #               'Qleft x Time',
+        #               'Qright x Time',
+        #               'Qhigh x Time',
+        #               'Qlow x Time',
+        #               'Qchosen x Time',
+        #               'Qdiff_ x Time',
+        #               'absQdiff x Time',
+        #               'RPE x Time',
+        #               ]
+        
+        # value regressors with ChoiceSide interactions
+        # self.all_regs = [
+        #               'Q1 x ChoiceSide',
+        #               'Q2 x ChoiceSide',
+        #               'Qleft x ChoiceSide',
+        #               'Qright x ChoiceSide',
+        #               'Qhigh x ChoiceSide',
+        #               'Qlow x ChoiceSide',
+        #               'Qchosen x ChoiceSide',
+        #               'Qdiff_ x ChoiceSide',
+        #               'absQdiff x ChoiceSide',
+        #               'RPE x ChoiceSide',
+        #               ]
+    
+    
+        # value regressors with exploitation/exploration interactions
+        # self.all_regs = [
+        #               'Q1 x ChoiceExploit',
+        #               'Q2 x ChoiceExploit',
+        #               'Qleft x ChoiceExploit',
+        #               'Qright x ChoiceExploit',
+        #               'Qhigh x ChoiceExploit',
+        #               'Qlow x ChoiceExploit',
+        #               'Qchosen x ChoiceExploit',
+        #               'Qdiff_ x ChoiceExploit',
+        #               'absQdiff x ChoiceExploit',
+        #               'RPE x ChoiceExploit',
+        #               ]
+    
+        # chosen value regressors with all interactions
+        # self.all_regs = [
+        #               'Qchosen',
+        #               'Qchosen x ChoiceTarg',
+        #               'Qchosen x ChoiceExploit',
+        #               'Qchosen x Time',
+        #               'Qchosen x State',
+        #               'Qchosen x ChoiceSide',
+        #               ]
+
+        # chosen value regressors with interactions and multiple terms
+        # self.all_regs = [
+        #               'Qchosen',
+        #               'Prev_Reward',
+        #               # ['Qchosen','State'],
+        #               # 'Qchosen x State',
+        #               'State',
+        #               # 'Qchosen x Time',
+        #               # ['Qchosen','Time'],
+        #               'Time',
+        #               ['Qchosen','Time','State'],
+        #               ['Prev_Reward','Time','State'],
+        #               # ['Qchosen','Prev_Reward','Time','State'],
+        #               ['Qch ⊥ Prev_Rew','Time','State'],
+        #               ['Qch ⊥ Prev_Rew','Prev_Reward','Time','State'],
+        #               ]
+        
+        
+        
+        # chosen value regressors with interactions and multiple terms
+        self.all_regs = [
+                      'Qchosen',
+                      'Prev_Reward',
+                      'State',
+                      'Time',
+                      ['Time','State'],
+                      ['Qchosen','Time','State'],
+                      ['Prev_Reward','Time','State'],
+                      ['Prev_Rew ⊥ Qch','Time','State'],
+                      ['Qch ⊥ Prev_Rew','Time','State'],
+                      ['Qch ⊥ Prev_Rew','Prev_Reward','Time','State'],
+                      ]
+        
+    
+        # residualized prev reward regressor with all interactions
+        # self.all_regs = [
+        #               'Prev_Rew ⊥ Qch',
+        #               'Prev_Rew ⊥ Qch x ChoiceTarg',
+        #               'Prev_Rew ⊥ Qch x ChoiceExploit',
+        #               'Prev_Rew ⊥ Qch x Time',
+        #               'Prev_Rew ⊥ Qch x State',
+        #               'Prev_Rew ⊥ Qch x ChoiceSide',
+        #               ]
+        
+        # prev reward regressor with all interactions
+        # self.all_regs = [
+        #               'Prev_Reward',
+        #               'Prev_Reward x ChoiceTarg',
+        #               'Prev_Reward x ChoiceExploit',
+        #               'Prev_Reward x Time',
+        #               'Prev_Reward x State',
+        #               'Prev_Reward x ChoiceSide',
+        #               ]
+        
+        # Q1 regressors with all interactions
+        # self.all_regs = [
+        #               'Q1',
+        #               'Q1 x ChoiceTarg',
+        #               'Q1 x ChoiceExploit',
+        #               'Q1 x Time',
+        #               'Q1 x State',
+        #               'Q1 x ChoiceSide',
+        #               ]
+        
+        # reward regressors with all interactions
+        # self.all_regs = [
+        #               'Q2',
+        #               'Q2 x ChoiceTarg',
+        #               'Q2 x ChoiceExploit',
+        #               'Q2 x Time',
+        #               'Q2 x State',
+        #               'Q2 x ChoiceSide',
+        #               ]
+        
+        return
+    
+    def get_reg_corr_matrix(self):
+        
+        reg_corr_matrices=[]
+        for s,session in enumerate(SESSIONS):
+            
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            
+            reg_corr_matrices.append(Behav.get_behavior_var_corr(self.all_regs))
+            
+            
+        # reg corr plot
+        _=ProcessBehavior.plot_var_corr(np.mean(reg_corr_matrices,axis=0),self.all_regs,'Across All Sessions Average')
+        
+        
+        return
+        
+    def calc_reg_metrics(self, metrics=['pval','rsqr','coef']):
+    
+        def get_interaction(compound_reg):
+            reg1,reg2 = compound_reg.split(sep=' x ')
+            interaction = behavior_df[reg1] * behavior_df[reg2]
+            interaction.name = compound_reg
+            return interaction
+        
+        # metrics = ['pval','rsqr','coef']
+        # metrics = ['rsqr']
+        # bounds = {'pval':[0.00,0.15], 'rsqr':[0.00,0.05], 'coef':[0.00,0.75]}
+        # thresh = {'pval':0.05, 'rsqr':0.05, 'coef':0.5}
+        colors = {AREAS[0]:'tab:green', AREAS[1]:'tab:blue'}
+        
+        PCA = PCA_Analysis()
+        
+        for PCA_or_singleunit in ['PCs','single units']:
+            print('*'*20)
+            print(PCA_or_singleunit)
+            
+            for area in AREAS:
+                print(area)
+                color=colors[area]
+            
+                metric_out_dict = dict()
+    
+                for metric in metrics:
+                    print(metric)
+                    start = time.time()
+                    for reg in self.all_regs:
+                        metric_out_dict[str(reg)] = []
+                        
+                        for s,session in enumerate(SESSIONS):
+                            
+                            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+                            behavior_df = Behav.behavior_df
+                            
+                            if PCA_or_singleunit == 'PCs':
+                                try:
+                                    area_fr_df = PCA.pcs_dfs_dict[session][area]
+                                except:
+                                    continue #no pca for this session/area
+                            elif PCA_or_singleunit == 'single units':
+                                area_fr_df = utils.area_parser(Spikes.fr_df,area)
+                                if len(area_fr_df)<1:
+                                    continue #no units for this session/area
+                                
+                            units = list(area_fr_df.columns)
+    
+                            
+                            for j,unit in enumerate(units):
+                                fr = area_fr_df[unit]       
+                            
+                                # simple regression
+                                if ' x ' not in reg: #for single (non-interaction) regressors
+                                    res = utils.linear_encoding_regression(fr,behavior_df[reg])
+                                if ' x ' in reg: #for interaction terms
+                                    interaction = get_interaction(reg)
+                                    res = utils.linear_encoding_regression(fr,interaction)
+                                
+                                # #multiple term regression
+                                # if isinstance(reg,list):
+                                    
+                                    
+                                
+                                if metric=='pval':
+                                    metric_out_dict[str(reg)].append(res.pvalues[reg])
+                                elif metric=='rsqr':
+                                    metric_out_dict[str(reg)].append(res.rsquared)
+                                elif metric=='adj rsqr':
+                                    metric_out_dict[str(reg)].append(res.rsquared_adj)
+                                elif metric=='coef':
+                                    metric_out_dict[str(reg)].append(abs(res.params[reg]))
+                                else:
+                                    raise ValueError
+                                    
+                    
+                        
+                    num_units = len(metric_out_dict[str(reg)])
+                    
+                    # # histograms
+                    # fig,axs=plt.subplots(3,3,layout='constrained')
+                    # fig.suptitle(f'{metric}, {area} {PCA_or_singleunit} (n={num_units})')
+                    # row_counter=0
+                    # col_counter=0
+                    # for reg in all_regs:
+                    #     ax=axs[row_counter,col_counter]
+                    #     ax.hist(metric_out_dict[reg],range=bounds[metric],color=color)
+                    #     # ax.vlines(thresh[metric],0,np.max(np.histogram(metric_out_dict[reg],range=bounds[metric])[0]),color='k',linestyle='--')
+                    #     ax.set_title(reg)
+                    #     if row_counter==2:
+                    #         ax.set_xlabel(metric)
+                    #     else:
+                    #         ax.set_xlabel('')
+                    #     if col_counter==0:
+                    #         ax.set_ylabel('Num')
+                    #     else:
+                    #         ax.set_ylabel('')
+                            
+                    #     row_counter+=1
+                    #     if row_counter>2:
+                    #         row_counter=0
+                    #         col_counter+=1
+                    #     if col_counter>2:
+                    #         fig,axs=plt.subplots(3,3,layout='constrained')
+                    #         fig.suptitle(f'{metric}, {area} {PCA_or_singleunit} (n={num_units})')
+                    #         row_counter=0
+                    #         col_counter=0
+                            
+                    
+                    
+                    #get avg and sem for bar plot
+                    avgs,sems = [],[]
+                    for reg in self.all_regs:
+                        avg,sem = utils.get_avg_sem(metric_out_dict[str(reg)],axis=0)
+                        avgs.append(avg)
+                        sems.append(sem)
+                     
+                    # avg + sem bar plot
+                    fig,ax=plt.subplots()
+                    fig.suptitle(f'{metric}, {area} {PCA_or_singleunit} (n={num_units})')
+                    ax.bar([str(reg) for reg in self.all_regs],avgs,yerr=sems,color=color)
+                    # ax.hlines(thresh[metric],0,len(all_regs),color='k',linestyle='--')
+                    ax.tick_params(axis='x', labelrotation=90)
+                    ax.set_ylabel(metric)
+                    
+                      
+                    # Get quartiles for each reg
+                    quarts={}
+                    for quart in [0.25,0.5,0.75]:
+                        q_=[]
+                        for reg in self.all_regs:
+                            quartiles = np.percentile(metric_out_dict[str(reg)],quart)
+                            q_.append(quartiles)
+                        quarts[str(quart)] = q_
+                        
+                    # quartile bar plot
+                    fig,ax=plt.subplots()
+                    fig.suptitle(f'{metric} Quartiles, {area} {PCA_or_singleunit} (n={num_units})')
+                    my_plot = ax.grouped_bar(quarts, tick_labels=self.all_regs, group_spacing=1)
+                    # for container in my_plot.bar_containers:
+                    #     ax.bar_label(container, padding=3)
+                    # ax.grouped_bar([str(reg) for reg in self.all_regs],quarts,color=color)
+                    # ax.hlines(thresh[metric],0,len(all_regs),color='k',linestyle='--')
+                    ax.tick_params(axis='x', labelrotation=90)
+                    ax.set_ylabel(metric)                   
+                    
+                    #best fit bar graph: num of units for which each reg has the highest r sqr
+                    if 'rsqr' in metric:
+                        df = pd.DataFrame(metric_out_dict) # rows = neurons, columns = regressors
+                        # df=df.drop(columns=df.filter(like="Time").columns) #exclude nuisance regs
+                        # df=df.drop(columns=df.filter(like="Stable").columns) #exclude nuisance regs
+                        counts = df.idxmax(axis=1).value_counts(normalize=True).reindex(df.columns, fill_value=0) *100
+                        fig,ax=plt.subplots()
+                        fig.suptitle(f'Percentage of units for which regressor was the best fit\n{area} {PCA_or_singleunit} (n={num_units})')  
+                        ax.bar(df.columns,counts,color=color)
+                        ax.tick_params(axis='x', labelrotation=90)
+                        ax.set_ylabel('% units')
+                        
+                    
+                    #explained bar graph: num of units for which each reg had a signif slope
+                    if metric=='pval':
+                        df = pd.DataFrame(metric_out_dict) # rows = neurons, columns = regressors
+                        # df.drop(columns='Time') #exclude nuisance reg
+                        threshold = 0.05
+                        signif = (df < threshold).mean()*100
+                        fig,ax=plt.subplots(layout='constrained')
+                        fig.suptitle(f'Percentage of units for which regressor was significant\n{area} {PCA_or_singleunit} (n={num_units})')
+                        ax.bar(df.columns,signif,color=color)
+                        ax.tick_params(axis='x', labelrotation=90)
+                        ax.set_ylabel('% units')
+                        
+                        
+                                   
+                    print(f'Time taken: {time.time()-start:.2f} secs')
+            
+
+                
+    
+        
+        return
 
 
 
@@ -5160,7 +5618,12 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # behavior_checks()
 # behavior_checks_2()
 
-PCA=PCA_Analysis(overwrite_flag=False)
+# RA=Regressor_Analysis()
+# RA.calc_reg_metrics(metrics=['adj rsqr'])
+# RA.calc_reg_metrics(metrics=['rsqr'])
+# RA.get_reg_corr_matrix()
+
+# PCA=PCA_Analysis(overwrite_flag=False)
 # _=PCA.count_allPCs_encoding_type()
 # _=PCA.count_eachPC_encoding_type()
 # PCA vs behavior
@@ -5219,9 +5682,9 @@ PCA=PCA_Analysis(overwrite_flag=False)
 # if __name__ == "__main__":
 #     run_temporal_encodings_LFP()
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
    # NT = NeuronType_Analysis(overwrite_flag=True)
-   # LR = LearningRate_Analysis(overwrite_flag=True)
+   LR = LearningRate_Analysis(overwrite_flag=True)
 
 # if __name__ == "__main__":
 #    # run_dual_vs_single_alpha_rsqr()

@@ -21,6 +21,7 @@ import sklearn
 import numpy as np
 # import scipy as sp
 import pandas as pd
+from scipy.stats import zscore
 # import matplotlib_venn
 import statsmodels.api as sm
 # from matplotlib.lines import Line2D
@@ -91,19 +92,191 @@ def get_trials_rewprob_volatility_Qchosen(df,stable_or_volatile,rew_prob):
     else:
         raise ValueError("Invalid value for stable_or_volatile")
     return list1 + list2
+
+   
+def area_parser(df_or_dict,brain_area):
+    
+    if type(df_or_dict) == dict:
+        
+        if 'unit_labels' in df_or_dict.keys():
+
+            match brain_area:
+                case 'vmPFC':
+                    idxs = [idx for idx,label in enumerate(df_or_dict['unit_labels']) if 'Unit A' in label]
+                case 'Cd':
+                    idxs = [idx for idx,label in enumerate(df_or_dict['unit_labels']) if 'Unit C' in label]
+                case 'OFC':
+                    idxs = [idx for idx,label in enumerate(df_or_dict['unit_labels']) if 'Unit D' in label]
+                case 'all areas':
+                    idxs = [idx for idx,label in enumerate(df_or_dict['unit_labels']) if 'Unit' in label]
+                case _:
+                    raise ValueError('Invalid brain area')
+            
+            subset_df_or_dict = {} 
+            for key,list_ in df_or_dict.items():
+                subset_df_or_dict[key] = [list_[i] for i in idxs]
+                    
+        else:
+            
+            match brain_area:
+                case 'vmPFC':
+                    subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit A' in k}
+                case 'Cd':
+                    subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit C' in k}
+                case 'OFC':
+                    subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit D' in k}
+                case 'all areas':
+                    subset_df_or_dict = df_or_dict
+                case _:
+                    raise ValueError('Invalid brain area')
+        
+                
+    if type(df_or_dict)==pd.DataFrame:
+        
+        if 'Unit_labels' in df_or_dict.columns: #unit=row organization
+            match brain_area:
+                case 'vmPFC':
+                    subset_df_or_dict = df_or_dict[df_or_dict['Unit_labels'].str.contains('Unit A')]
+                case 'Cd':
+                    subset_df_or_dict = df_or_dict[df_or_dict['Unit_labels'].str.contains('Unit C')]
+                case 'OFC':
+                    subset_df_or_dict = df_or_dict[df_or_dict['Unit_labels'].str.contains('Unit D')]
+                case 'all areas':
+                    subset_df_or_dict = df_or_dict
+                case _:
+                    raise ValueError('Invalid brain area')
+                    
+        elif 'Unit' in df_or_dict.columns: #unit=row organization
+            match brain_area:
+                case 'vmPFC':
+                    subset_df_or_dict = df_or_dict[df_or_dict['Unit'].str.contains('Unit A')]
+                case 'Cd':
+                    subset_df_or_dict = df_or_dict[df_or_dict['Unit'].str.contains('Unit C')]
+                case 'OFC':
+                    subset_df_or_dict = df_or_dict[df_or_dict['Unit'].str.contains('Unit D')]
+                case 'all areas':
+                    subset_df_or_dict = df_or_dict
+                case _:
+                    raise ValueError('Invalid brain area')
+                    
+        else: #unit=col organization
+            match brain_area:
+                case 'vmPFC':
+                    subset_df_or_dict = df_or_dict.filter(like='Unit A',axis=1)
+                case 'Cd':
+                    subset_df_or_dict = df_or_dict.filter(like='Unit C',axis=1)
+                case 'OFC':
+                    subset_df_or_dict = df_or_dict.filter(like='Unit D',axis=1)
+                case 'all areas':
+                    subset_df_or_dict = df_or_dict
+                case _:
+                    raise ValueError('Invalid brain area')
+      
+    return subset_df_or_dict
+
+def count_units_area(dict_,brain_area):
+    
+    assert 'unit_labels' in dict_.keys()
+    
+    match brain_area:
+        case 'vmPFC':
+            n_units = sum(['Unit A' in label for label in dict_['unit_labels']])
+        case 'Cd':
+            n_units = sum(['Unit C' in label for label in dict_['unit_labels']])
+        case 'OFC':
+            n_units = sum(['Unit D' in label for label in dict_['unit_labels']])
+        case 'all areas':
+            n_units = sum(['Unit' in label for label in dict_['unit_labels']])
+        case _:
+            raise ValueError('Invalid brain area')
+    
+    return n_units
+
+def get_trials(behav_df,stable_or_volatile):
+    
+    all_trials = np.arange(len(behav_df))
+    
+    match stable_or_volatile:
+        case 'stable block':
+            trials = all_trials[behav_df['Stable']==1]
+        case 'volatile block':
+            trials = all_trials[behav_df['Volatile']==1]
+        case 'all trials':
+            trials = all_trials
+        case _:
+            raise ValueError('Invalid subsession')
+            
+    return trials
+
+def get_trials_even_num(behav_df,stable_or_volatile):
+    
+    all_trials = np.arange(len(behav_df))
+    
+    match stable_or_volatile:
+        case 'stable block':
+            trials = all_trials[behav_df['Stable']==1]
+        case 'volatile block':
+            trials = all_trials[behav_df['Volatile']==1]
+        case 'all trials':
+            trials = all_trials
+        case _:
+            raise ValueError('Invalid subsession')
+    if stable_or_volatile != 'all trials': 
+        num_stable_trials = len(all_trials[behav_df['Stable']==1])
+        num_volatile_trials = len(all_trials[behav_df['Volatile']==1])
+        lowest_num_trials = np.min([num_stable_trials,num_volatile_trials])
+        trials = trials[:lowest_num_trials]
+            
+    return trials
+
+def get_unique_units(unit_list,SUBSESSIONS):
+    for subsession in SUBSESSIONS:
+        unit_list = [unit.removesuffix(f' - {subsession}') for unit in unit_list]
+        
+    return np.unique(np.array(unit_list))
+
+def get_unit_data(df,unit,heading):
+    assert unit in df['Unit'].values, f'unit {unit} not found! missing subsession?'
+    assert heading in df.columns, f'df heading {heading} not found!'
+    desired_row = df[df['Unit']==unit]
+    if len(desired_row)>0:
+        desired_value = desired_row[heading].values[0]
+    else:
+        # desired_value = ''
+        desired_value = np.nan
+
+    return desired_value
+
+def calc_percent_encoding(pval_df,alpha_threshold):
+    pval_df = pval_df.drop('Unit_labels',axis=1)
+    df_signif = pval_df < alpha_threshold
+    num_signif = df_signif.sum(axis='index')
+    num_units = pval_df.shape[0]
+    percent_encoding = num_signif / num_units
+    return percent_encoding, num_units
+
+#%% Regression
 def linear_encoding_regression(spikes,behavior):
     '''
     Parameters
     ----------
     spikes : (1 x num_trials) array of spiking information (psth timebin info or firing rate)
-    behavior : (num_regressors x num_trials) array of behavioral information (do not include const. This will be added internally)
+    behavior : (num_trials x num_regressors) array of behavioral information (do not include const. This will be added internally)
 
     Returns
     -------
     f_pval : float. p-value for entire regression
     pvals : (1 x num_regressors) array of p-values for each regressor
     '''
-    model = sm.OLS(spikes, sm.add_constant(behavior,has_constant='add'), missing='raise',hasconst=True)
+    assert np.shape(spikes)[0] == np.shape(behavior)[0]
+    
+    # zscore behavior without losing column titles if possible
+    if isinstance(behavior, (pd.DataFrame, pd.Series)):
+        behavior = (behavior - behavior.mean()) / behavior.std()
+    else:
+        behavior = zscore(behavior,axis=0)
+        
+    model = sm.OLS(zscore(spikes,axis=0), sm.add_constant(behavior,has_constant='add'), missing='raise',hasconst=True)
     # #Variance inflation factor analysis
     # vif = np.array([variance_inflation_factor(behavior, i) for i in range(np.shape(behavior)[0])])
     # vif_threshold = 5
@@ -121,6 +294,10 @@ def linear_encoding_regression(spikes,behavior):
     # f_pval = res.f_pvalue
     # rsqr = res.rsquared
     return res #f_pval, pvals, rsqr
+
+def residualize(reg1,reg2):
+    res = linear_encoding_regression(reg1,reg2)
+    return res.resid #reg1 that cannot be expained by reg2 (is orthogonal to reg2)
 
 def linear_encoding_regression_feature_selection(regressor_list,spikes,behavior_df,alpha_thresh):
     res = linear_encoding_regression(spikes,behavior_df[regressor_list])
@@ -148,7 +325,42 @@ def linear_encoding_regression_feature_selection(regressor_list,spikes,behavior_
         signif_regressors = 'none'
         
     return signif_regressors
+
+
+def linear_encoding_regression_feature_selection_new(list_of_regressor_lists,spikes,behavior_df,alpha_thresh):
+    '''
+    Given a list of possible regressor sets (which all include a different value term),
+    return the value term which best explains the neuron FR (as judged by r sqr)
+    '''
+    
+    rsqrs, value_terms = [],[] #save the rsqrs and corresponding value terms from each regression
+
+    for i,regressor_list in enumerate(list_of_regressor_lists):
+    
+        res = linear_encoding_regression(spikes,behavior_df[regressor_list])
         
+        #only consider if regression is significant
+        if res.f_pvalue < alpha_thresh:
+            
+            #find value term
+            value_reg_list = [reg for reg in regressor_list if 'Q'==reg[0]]
+            assert len(value_reg_list) == 1, 'Pls include only one value term per regression!'
+            value_reg = value_reg_list[0]
+            
+            # only consider if value term is also significant
+            if res.pvalues[value_reg] < alpha_thresh:
+                
+                #if regression and value term are both significant, 
+                #then save out rsqr for comparison
+                rsqrs.append(res.rsquared)
+                value_terms.append(value_reg)
+    
+    if len(rsqrs)==0:
+        best_encoding = 'none'
+    else:
+        best_encoding = value_terms[np.argmax(rsqrs)]
+        
+    return best_encoding        
 
 def regularization_regression(spikes,behavior, lasso_or_ridge='lasso', regularization_strength=1e-5, tol=1e-4, verbose=False):
     '''
@@ -344,174 +556,15 @@ def get_rsqrs_from_LRs(stable_or_volatile, fr_df, Behavior, neuron_type_df, lear
         regressor_matrix = Behavior.behavior_df[REGRESSORS].iloc[trials]
         fr = fr_df[unit].iloc[trials] #vector of FRs for subsession trial
         # regress fr against this learning rate behavior
-        res = utils.linear_encoding_regression(fr, regressor_matrix)
+        res = linear_encoding_regression(fr, regressor_matrix)
 
         rsqrs.append(res.rsquared)
         
     return rsqrs
 
-    
-def area_parser(df_or_dict,brain_area):
-    
-    if type(df_or_dict) == dict:
-        
-        if 'unit_labels' in df_or_dict.keys():
+ 
 
-            match brain_area:
-                case 'vmPFC':
-                    idxs = [idx for idx,label in enumerate(df_or_dict['unit_labels']) if 'Unit A' in label]
-                case 'Cd':
-                    idxs = [idx for idx,label in enumerate(df_or_dict['unit_labels']) if 'Unit C' in label]
-                case 'OFC':
-                    idxs = [idx for idx,label in enumerate(df_or_dict['unit_labels']) if 'Unit D' in label]
-                case 'all areas':
-                    idxs = [idx for idx,label in enumerate(df_or_dict['unit_labels']) if 'Unit' in label]
-                case _:
-                    raise ValueError('Invalid brain area')
-            
-            subset_df_or_dict = {} 
-            for key,list_ in df_or_dict.items():
-                subset_df_or_dict[key] = [list_[i] for i in idxs]
-                    
-        else:
-            
-            match brain_area:
-                case 'vmPFC':
-                    subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit A' in k}
-                case 'Cd':
-                    subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit C' in k}
-                case 'OFC':
-                    subset_df_or_dict = {k:v for k,v in df_or_dict.items() if 'Unit D' in k}
-                case 'all areas':
-                    subset_df_or_dict = df_or_dict
-                case _:
-                    raise ValueError('Invalid brain area')
-        
-                
-    if type(df_or_dict)==pd.DataFrame:
-        
-        if 'Unit_labels' in df_or_dict.columns: #unit=row organization
-            match brain_area:
-                case 'vmPFC':
-                    subset_df_or_dict = df_or_dict[df_or_dict['Unit_labels'].str.contains('Unit A')]
-                case 'Cd':
-                    subset_df_or_dict = df_or_dict[df_or_dict['Unit_labels'].str.contains('Unit C')]
-                case 'OFC':
-                    subset_df_or_dict = df_or_dict[df_or_dict['Unit_labels'].str.contains('Unit D')]
-                case 'all areas':
-                    subset_df_or_dict = df_or_dict
-                case _:
-                    raise ValueError('Invalid brain area')
-                    
-        elif 'Unit' in df_or_dict.columns: #unit=row organization
-            match brain_area:
-                case 'vmPFC':
-                    subset_df_or_dict = df_or_dict[df_or_dict['Unit'].str.contains('Unit A')]
-                case 'Cd':
-                    subset_df_or_dict = df_or_dict[df_or_dict['Unit'].str.contains('Unit C')]
-                case 'OFC':
-                    subset_df_or_dict = df_or_dict[df_or_dict['Unit'].str.contains('Unit D')]
-                case 'all areas':
-                    subset_df_or_dict = df_or_dict
-                case _:
-                    raise ValueError('Invalid brain area')
-                    
-        else: #unit=col organization
-            match brain_area:
-                case 'vmPFC':
-                    subset_df_or_dict = df_or_dict.filter(like='Unit A',axis=1)
-                case 'Cd':
-                    subset_df_or_dict = df_or_dict.filter(like='Unit C',axis=1)
-                case 'OFC':
-                    subset_df_or_dict = df_or_dict.filter(like='Unit D',axis=1)
-                case 'all areas':
-                    subset_df_or_dict = df_or_dict
-                case _:
-                    raise ValueError('Invalid brain area')
-      
-    return subset_df_or_dict
-
-def count_units_area(dict_,brain_area):
-    
-    assert 'unit_labels' in dict_.keys()
-    
-    match brain_area:
-        case 'vmPFC':
-            n_units = sum(['Unit A' in label for label in dict_['unit_labels']])
-        case 'Cd':
-            n_units = sum(['Unit C' in label for label in dict_['unit_labels']])
-        case 'OFC':
-            n_units = sum(['Unit D' in label for label in dict_['unit_labels']])
-        case 'all areas':
-            n_units = sum(['Unit' in label for label in dict_['unit_labels']])
-        case _:
-            raise ValueError('Invalid brain area')
-    
-    return n_units
-
-def get_trials(behav_df,stable_or_volatile):
-    
-    all_trials = np.arange(len(behav_df))
-    
-    match stable_or_volatile:
-        case 'stable block':
-            trials = all_trials[behav_df['Stable']==1]
-        case 'volatile block':
-            trials = all_trials[behav_df['Volatile']==1]
-        case 'all trials':
-            trials = all_trials
-        case _:
-            raise ValueError('Invalid subsession')
-            
-    return trials
-
-def get_trials_even_num(behav_df,stable_or_volatile):
-    
-    all_trials = np.arange(len(behav_df))
-    
-    match stable_or_volatile:
-        case 'stable block':
-            trials = all_trials[behav_df['Stable']==1]
-        case 'volatile block':
-            trials = all_trials[behav_df['Volatile']==1]
-        case 'all trials':
-            trials = all_trials
-        case _:
-            raise ValueError('Invalid subsession')
-    if stable_or_volatile != 'all trials': 
-        num_stable_trials = len(all_trials[behav_df['Stable']==1])
-        num_volatile_trials = len(all_trials[behav_df['Volatile']==1])
-        lowest_num_trials = np.min([num_stable_trials,num_volatile_trials])
-        trials = trials[:lowest_num_trials]
-            
-    return trials
-
-def get_unique_units(unit_list,SUBSESSIONS):
-    for subsession in SUBSESSIONS:
-        unit_list = [unit.removesuffix(f' - {subsession}') for unit in unit_list]
-        
-    return np.unique(np.array(unit_list))
-
-def get_unit_data(df,unit,heading):
-    assert unit in df['Unit'].values, f'unit {unit} not found! missing subsession?'
-    assert heading in df.columns, f'df heading {heading} not found!'
-    desired_row = df[df['Unit']==unit]
-    if len(desired_row)>0:
-        desired_value = desired_row[heading].values[0]
-    else:
-        # desired_value = ''
-        desired_value = np.nan
-
-    return desired_value
-
-def calc_percent_encoding(pval_df,alpha_threshold):
-    pval_df = pval_df.drop('Unit_labels',axis=1)
-    df_signif = pval_df < alpha_threshold
-    num_signif = df_signif.sum(axis='index')
-    num_units = pval_df.shape[0]
-    percent_encoding = num_signif / num_units
-    return percent_encoding, num_units
-
+#%% data IO and transforms
 def dict_to_arr(d: dict):
     '''
     for when theres a dictionary of arrays of the same size

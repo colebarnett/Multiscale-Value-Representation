@@ -408,8 +408,7 @@ class ChoiceBehavior_Whitehall():
         rew_probs_H = rew_probs
         rew_probs_L = 1 - rew_probs_H
         
-        if np.any(np.isnan(rew_probs_H)):
-            print(self.filename, 'NAN FOUND WHILE FINDING BLOCK REW PROBS')
+        assert ~np.any(np.isnan(rew_probs_H)), f'NAN FOUND WHILE FINDING BLOCK REW PROBS {self.filename}'
             
         return rew_probs_H, rew_probs_L
         

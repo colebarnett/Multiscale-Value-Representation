@@ -16,7 +16,7 @@ def get_block_info(session):
     
     #stable first = 6bl*100tr + 48bl*20tr
     #vol first = 24bl*20tr + 12bl*100tr
-    #goal is to get ~1000tr per session, 480 volatile and 600 stable
+    #goal is to get ~1080tr per session, 480 volatile and 600 stable
     max_num_trials = 1600 #sufficiently long, monkeys usually only go 1000
 
     #initiate arrays

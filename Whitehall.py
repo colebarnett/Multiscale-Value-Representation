@@ -76,19 +76,22 @@ from numpy.polynomial.polynomial import polyfit
 
 #### Libraries and Paths
 
-##Yi's desktop^M
-BMI_FOLDER = r"C:\Users\crb4972\bmi_python"
-PROJ_FOLDER = r"C:\Users\crb4972\Desktop\whitehall\whitehall\Multiscale-Value-Representation"
-DATA_FOLDER = r"E:\Whitehall\data"
+##Yi's desktop
+# BMI_FOLDER = r"C:\Users\crb4972\bmi_python"
+# PROJ_FOLDER = r"C:\Users\crb4972\Desktop\whitehall\whitehall\Multiscale-Value-Representation"
+# DATA_FOLDER = r"E:\Whitehall\data"
+
+##Cole laptop
+PROJ_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis"
+BMI_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\bmi_python"
+DATA_FOLDER = os.path.join(PROJ_FOLDER, 'data')
 
 # PROJ_FOLDER = r"D:\Whitehall"
-# PROJ_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\Whitehall\Analysis"
-# BMI_FOLDER = r"C:\Users\coleb\Desktop\Santacruz Lab\bmi_python"
 # PROJ_FOLDER = r"F:\cole"
 # BMI_FOLDER = r"C:\Users\crb4972\Desktop\bmi_python"
+# DATA_FOLDER = os.path.join(PROJ_FOLDER, 'data')
 NS_FOLDER = os.path.join(BMI_FOLDER, 'riglib', 'ripple', 'pyns', 'pyns') #Neuroshare python
 NSX_FOLDER = os.path.join(BMI_FOLDER, 'riglib', 'blackrock')
-# DATA_FOLDER = os.path.join(PROJ_FOLDER, 'data')
 
 # Add paths for necessary packages to search path
 sys.path.insert(1,BMI_FOLDER) 
@@ -266,7 +269,7 @@ SESSIONS = [
             "braz20260924_03_te2622",
             "braz20260925_03_te2625",
             "braz20261001_03_te2628",
-            # # "braz20261002_05_te2633", #too few trials (747), excluded
+            # # # "braz20261002_05_te2633", #too few trials (747), excluded
             "braz20261007_03_te2636",
             # # "braz20261008_03_te2639", #too few trials (845), excluded
             # # "braz20261009_03_te2642", #too few trials (1041), excluded
@@ -348,7 +351,7 @@ Q2_REGRESSORS = [
 REGRESSOR_SUPERSET_DICT = {'Qchosen': QCHOSEN_REGRESSORS,
                            'Q1': Q1_REGRESSORS,
                            'Q2': Q2_REGRESSORS,}
-ALL_REGRESSORS = list(set().union(*REGRESSOR_SUPERSET)) #all unique regs
+ALL_REGRESSORS = list(set().union(*REGRESSOR_SUPERSET_DICT.values())) #all unique regs
 
 
 
@@ -388,17 +391,11 @@ T_RES = 0.05 #time resolution ; size of time bins [s]
 T_VECTOR = np.round(np.arange(-T_BEFORE+T_RES, T_AFTER, T_RES),decimals=2)
 N_TIMEBINS = len(T_VECTOR)
 
-LEARNING_RATES = np.linspace(start=0.00,stop=1.0,num=51) #used for single learning rate
-# LEARNING_RATES = np.linspace(start=0.00,stop=1.0,num=21) #used for dual learning rates
-
-# REGRESSORS = ['Q1','Q2','Choice1',
-#               'Qlow','Qhigh','Qdiff','absQdiff',
-#               'Choice_low','Side','Time']
-
-#Since Q1+Q2=1 and Qlow+Qhigh=1, only one regressor of each pair is needed.
-# REGRESSORS = ['Q1','Choice1',
-#               'Qhigh','Qdiff_','absQdiff',
-#               'Choice_low','Side','Time']
+if 'Dual' in VALUE_MODEL:
+    LEARNING_RATES = np.linspace(start=0.05,stop=0.95,num=19) #used for dual learning rates
+else:
+    LEARNING_RATES = np.linspace(start=0.02,stop=0.98,num=49) #used for single learning rate
+    
 
 ALPHA_THRESHOLD = 0.05
 
@@ -1066,8 +1063,7 @@ class ProcessBehavior:
         Q_L = np.where(left_choice,Q_chosen,Q_unchosen)
         Q_R = np.where(left_choice,Q_unchosen,Q_chosen)
 
-
-        assert len(choices) == len(choice_side) == len(time) == len(Q1) == len(Q2) == len(rpe) == len(is_stable_block) == len(rew_probs_1)
+        assert len(choices) == len(choice_side) == len(time) == len(Q1) == len(Q2) == len(rpe) == len(is_stable_block) == len(rew_probs_1) == len(prev_reward)
 
         
         self.behavior_df = pd.DataFrame.from_dict(
@@ -1102,6 +1098,16 @@ class ProcessBehavior:
 
         return
         
+class BehaviorPlots:
+    def __init__(self, session: str, subsession: str):
+        
+        self.session=session
+        self.subsession=subsession
+        session_idx = SESSIONS.index(session)
+        self.behavior_df = BEHAV_LIST[session_idx]
+        
+        return
+    
     
     def check_all_behavior(self):
         
@@ -1157,6 +1163,7 @@ class ProcessBehavior:
         
         return fig   
     
+    
     def plot_values_vs_choices_vs_rewprob(self,num_targs=1,num_trials_to_plot=200,save_flag=False):
         
         fig,ax=plt.subplots(layout='constrained')
@@ -1191,6 +1198,36 @@ class ProcessBehavior:
         
         return fig
     
+    
+    def plot_choices_vs_rewprob(self,num_targs=1,trials_to_plot=[0,200],save_flag=False):
+        start=trials_to_plot[0]
+        end=trials_to_plot[1]
+        fig,ax=plt.subplots(layout='constrained')
+        
+        #actual rew prob
+        ax.plot(self.behavior_df['Rew_prob_1'].iloc[start:end],color='k',linestyle='--',label='Reward Probability 1')
+        if num_targs==2:
+            ax.plot(self.behavior_df['Rew_prob_2'].iloc[start:end],color='gray',linestyle='--',label='Reward Probability 2')
+        
+        #smoothed choice prob
+        window_length=10
+        P_LV = BehaviorAnalysis.trial_sliding_avg(self.behavior_df['Choice1'].iloc[start:end],window_length)
+        P_HV = BehaviorAnalysis.trial_sliding_avg(1 - self.behavior_df['Choice1'].iloc[start:end],window_length)
+        ax.plot(P_LV,color='red',label='Choice 1')
+        if num_targs==2:
+            ax.plot(P_HV,color='green',label='Choice 2')
+            
+        #plot labels
+        ax.set_title('Actual Choices vs Actual Rew Prob')
+        ax.legend()
+        ax.set_xlabel('Trials')
+        
+        fig.suptitle(f'{self.session}\n{VALUE_MODEL}')
+        
+        if save_flag:
+            utils.save_svg(fig,self.session,'ChoicesVsRewProb',PROJ_FOLDER)
+        
+        return fig
     
     def plot_values_vs_choices(self,num_targs=1,num_trials_to_plot=200,save_flag=False):
         
@@ -1235,16 +1272,16 @@ class ProcessBehavior:
         for trial in range(num_trials_to_plot):
             if self.behavior_df['Choice1'].iloc[trial] == 1:
                 if self.behavior_df['Reward'].iloc[trial] == 1:
-                    ax.plot(trial,self.behavior_df['Q1'].iloc[trial],color='orange',marker='^') #rewarded choice 1s
+                    ax.plot(trial,self.behavior_df['Q1'].iloc[trial],color='orange',marker='^') #rewarded choice1s
                 else:
-                    ax.plot(trial,self.behavior_df['Q1'].iloc[trial],color='orange',marker='s') #unrewarded choice 1s
+                    ax.plot(trial,self.behavior_df['Q1'].iloc[trial],color='orange',marker='s') #unrewarded choice1s
             
             if num_targs==2:
                 if self.behavior_df['Choice2'].iloc[trial] == 1:
                     if self.behavior_df['Reward'].iloc[trial] == 1:
-                        ax.plot(trial,self.behavior_df['Q2'].iloc[trial],color='turquoise',marker='^') #rewarded choice 2s
+                        ax.plot(trial,self.behavior_df['Q2'].iloc[trial],color='turquoise',marker='^') #rewarded choice2s
                     else:
-                        ax.plot(trial,self.behavior_df['Q2'].iloc[trial],color='turquoise',marker='s') #unrewarded choice 2s
+                        ax.plot(trial,self.behavior_df['Q2'].iloc[trial],color='turquoise',marker='s') #unrewarded choice2s
         
             
         #plot labels
@@ -1705,8 +1742,8 @@ class LearningRate_Analysis:
                 ## Do regression for all learning rate combos
                 ## Keep regressor set and learning rate(s) that fit best
                 best_rsqr = 0.
-                best_learning_rate = None
-                neuron_type = None
+                best_learning_rates = ['None','None']
+                neuron_type = 'None'
                 
                 
                 if 'Dual' not in VALUE_MODEL: #single LR
@@ -1728,13 +1765,13 @@ class LearningRate_Analysis:
                                 # take lr and value type if it yields the best rsqr so far, otherwise continue on
                                 if res.rsquared > best_rsqr:
                                     best_rsqr = res.rsquared
-                                    best_learning_rate = alpha
+                                    best_learning_rates[0] = alpha
                                     neuron_type = value_type
                                     
                     #save out info for unit
                     lr_row_dict = {'Unit':f'{unit} - {stable_or_volatile}',
                                    'Neuron Type': neuron_type,
-                                   'Learning Rate': best_learning_rate,
+                                   'Learning Rate': best_learning_rates[0],
                                    'R-Squared': best_rsqr}
                     df_rows_learning_rates.append(lr_row_dict)
                 
@@ -3646,9 +3683,10 @@ class SubsessionVsFR_Analysis:
 class Behavior_Analysis:
     def __init__(self):
         return
-
+    
+    
     @staticmethod
-    def value_dists():
+    def choice_behav():
         df_list = []
         for s, session in enumerate(SESSIONS):
             Spikes, Behav, LFP = get_Spikes_Behav_LFP(s, session)
@@ -3660,47 +3698,123 @@ class Behavior_Analysis:
             df_list.append(Behav.behavior_df)
 
         print(f'len df_list: {len(df_list)}')
-        Behavior_Analysis.plot_value_dist(df_list)
+        Behavior_Analysis.plot_choice_behav(df_list)
 
         return
     
     @staticmethod
-    def plot_value_dist(behavior_df_list):
+    def plot_choice_behav(behavior_df_list):
+        ##get fraction of choices towards a target during a given subsession and rew prob
+        combined_df = utils.merge_sessions_df(behavior_df_list)
+
+        def get_choices_rewprob_volatility(df, stable_or_volatile, rew_prob1):
+            
+            trials = utils.get_trials_rewprob_volatility(df, stable_or_volatile, rew_prob1)
+            choice1 = df['Choice1'].iloc[trials]
+            
+            trials = utils.get_trials_rewprob_volatility(df, stable_or_volatile,1 - rew_prob1)  # do 1 minus rew prob since this is for targ 2
+            choice2 = df['Choice2'].iloc[trials]
+            
+            return np.mean(pd.concat([choice1,choice2]))
+
+        
+
+        ## Variance Bar plots
+        # vars_df = {'RewProb': [], 'StableOrVolatile': [], 'Variance': []}
+        ylims = 0, 1
+        colors = ['darkgray', 'dimgray']
+        
+        def plot_choice_bar(rewprobs,rewprob_labels):
+            fig, ax = plt.subplots(layout='constrained')
+            handles = []
+            for i, stable_or_volatile in enumerate(SUBSESSIONS[1:]):
+                for ii, rew_prob in enumerate(rewprobs):
+                    choices = []
+                    for behavior_df in behavior_df_list:  # loop thru all sessions individually
+                        pct = get_choices_rewprob_volatility(behavior_df, stable_or_volatile, rew_prob)
+                        choices.append(pct)
+
+                    avg, sem = utils.get_avg_sem(choices, axis=0)
+                    ax.bar(i + (ii * 2.5), avg, label=stable_or_volatile, color=colors[i])
+                    ax.errorbar(i + (ii * 2.5), avg, sem, ecolor='k', color='k')
+                patch = mpatches.Patch(color=colors[i], label=stable_or_volatile)
+                handles.append(patch)
+
+            ax.legend(handles=handles)
+            ax.set_ylabel('Choice Fraction')
+            ax.set_xticks([0.5, 3.0], [f'Rew Prob: {rewprobs[0]}', f'Rew Prob: {rewprobs[1]}'])
+            ax.set_title(f'Target Reward Probabilities: {rewprob_labels}\nn={len(choices)}')
+            ax.set_ylim(ylims)
+            return
+
+        # rewprob = 0/1 plot
+        plot_choice_bar([0.,1.],'0/1') # rewprob = 0/1 plot
+        plot_choice_bar([0.2,0.8],'0.2/0.8') # rewprob = 0.2/0.8 plot
+        plot_choice_bar([0.4,0.6],'0.4/0.6') # rewprob = 0.4/0.6 plot
+        
+        
+        return
+
+
+
+
+
+    @staticmethod
+    def value_dists(chosen_value_only=False):
+        df_list = []
+        for s, session in enumerate(SESSIONS):
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s, session)
+
+            #for plotting single sess results
+            # Behav.plot_values(save_flag=False)
+            # Behav.plot_value_dist(save_flag=False) #good for exemplar plots
+
+            df_list.append(Behav.behavior_df)
+
+        print(f'len df_list: {len(df_list)}')
+        Behavior_Analysis.plot_value_dist(df_list,chosen_value_only)
+
+        return
+    
+    @staticmethod
+    def plot_value_dist(behavior_df_list,chosen_value_only):
 
         combined_df = utils.merge_sessions_df(behavior_df_list)
 
-        def get_values_rewprob_volatility(df, stable_or_volatile, rew_prob):
+        def get_values_rewprob_volatility(df, stable_or_volatile, rew_prob1, chosen_value_only):
             if 'Q1' in df.columns:
-                trials = utils.get_trials_rewprob_volatility(df, stable_or_volatile, rew_prob)
+                trials = utils.get_trials_rewprob_volatility(df, stable_or_volatile, rew_prob1)
                 Q1 = df['Q1'].iloc[trials]
             else:
                 Q1 = np.full(len(df), np.nan)
 
             if 'Q2' in df.columns:
                 trials = utils.get_trials_rewprob_volatility(df, stable_or_volatile,
-                                                             1 - rew_prob)  # do 1 minus rew prob since this is for targ 2
+                                                             1 - rew_prob1)  # do 1 minus rew prob1 since this is for targ 2
                 Q2 = df['Q2'].iloc[trials]
             else:
                 Q2 = np.full(len(df), np.nan)
 
             if 'Qchosen' in df.columns:
-                trials = utils.get_trials_rewprob_volatility_Qchosen(df, stable_or_volatile,rew_prob)
+                trials = utils.get_trials_rewprob_volatility_Qchosen(df, stable_or_volatile,rew_prob1)
                 Qch = df['Qchosen'].iloc[trials]
             else:
                 Qch = np.full(len(df), np.nan)
-                
-            return np.concatenate([Q1, Q2])
-            # return Qch
+            
+            if chosen_value_only:
+                return Qch
+            else:
+                return np.concatenate([Q1, Q2])
 
         ## Histogram plots
         bins = np.linspace(0.0, 1.0, num=20)
         
-        def plot_valuedist_hist(rewprobs,rewprob_labels):
+        def plot_valuedist_hist(rewprobs,rewprob_labels,chosen_value_only):
             
             fig, ax = plt.subplots(layout='constrained')
             for i, stable_or_volatile in enumerate(SUBSESSIONS[1:]):
                 for ii, rew_prob in enumerate(rewprobs):
-                    values = get_values_rewprob_volatility(combined_df, stable_or_volatile, rew_prob)
+                    values = get_values_rewprob_volatility(combined_df, stable_or_volatile, rew_prob, chosen_value_only)
                     ax.hist(values, density=True, bins=bins, histtype='step',
                             label=stable_or_volatile, linestyle=LINESTYLES[i], color=COLORS[ii])
             ax.legend()
@@ -3709,9 +3823,9 @@ class Behavior_Analysis:
             ax.set_title(f'Target Reward Probabilities: {rewprob_labels}')
             return
         
-        plot_valuedist_hist([0.,1.],'0/1') # rewprob = 0/1 plot
-        plot_valuedist_hist([0.2,0.8],'0.2/0.8') # rewprob = 0.2/0.8 plot
-        plot_valuedist_hist([0.4,0.6],'0.4/0.6') # rewprob = 0.4/0.6 plot
+        plot_valuedist_hist([0.,1.],'0/1',chosen_value_only) # rewprob = 0/1 plot
+        plot_valuedist_hist([0.2,0.8],'0.2/0.8',chosen_value_only) # rewprob = 0.2/0.8 plot
+        plot_valuedist_hist([0.4,0.6],'0.4/0.6',chosen_value_only) # rewprob = 0.4/0.6 plot
         
 
         ## Variance Bar plots
@@ -3726,7 +3840,7 @@ class Behavior_Analysis:
                 for ii, rew_prob in enumerate(rewprobs):
                     vars_ = []
                     for behavior_df in behavior_df_list:  # loop thru all sessions individually
-                        values = get_values_rewprob_volatility(behavior_df, stable_or_volatile, rew_prob)
+                        values = get_values_rewprob_volatility(behavior_df, stable_or_volatile, rew_prob, chosen_value_only)
                         if len(values) > 0:
                             var = np.nanvar(values)
                             vars_.append(var)
@@ -5474,6 +5588,21 @@ def spike_inclusion_sanity():
     
     return
 
+def plot_choice_vs_rewprob_vol_exemplar():
+    
+    
+    session = "braz20260824_03_te2584"
+    
+    BehaviorPlots(sess)
+    
+    for s,session in enumerate(SESSIONS):
+
+        if session == session_to_plot:    
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            Behav.plot_choices_vs_rewprob(num_targs=1,trials_to_plot=[0,300],save_flag=False)
+            Behav.plot_choices_vs_rewprob(num_targs=1,trials_to_plot=[1280,1580],save_flag=False)
+    return
+
 def plot_behavior_new(session_to_plot=''):  
     '''
     session_to_plot parameter is optional to plot only a specific session
@@ -5493,10 +5622,11 @@ def plot_behavior_new(session_to_plot=''):
             # Behav.plot_choices_and_rewards(save_flag=False)
             # Behav.plot_values(save_flag=False)
             # Behav.plot_choices(save_flag=False)
-            Behav.plot_values_vs_choices_vs_rewprob(num_targs=1,num_trials_to_plot=60,save_flag=False)
-            Behav.plot_values_vs_rewards(num_targs=1,num_trials_to_plot=60,save_flag=False)
-            Behav.plot_values_vs_choices_vs_rewprob(num_targs=2,num_trials_to_plot=60,save_flag=False)
-            Behav.plot_values_vs_rewards(num_targs=2,num_trials_to_plot=60,save_flag=False)
+            # Behav.plot_values_vs_choices_vs_rewprob(num_targs=1,num_trials_to_plot=60,save_flag=False)
+            # Behav.plot_values_vs_rewards(num_targs=1,num_trials_to_plot=60,save_flag=False)
+            # Behav.plot_values_vs_choices_vs_rewprob(num_targs=2,num_trials_to_plot=60,save_flag=False)
+            # Behav.plot_values_vs_rewards(num_targs=2,num_trials_to_plot=60,save_flag=False)
+            Behav.plot_choices_vs_rewprob(num_targs=1,num_trials_to_plot=300,save_flag=False)
             
     return    
 
@@ -5613,9 +5743,13 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 
 # plot_behavior()
 
+## Value distributions
+Behavior_Analysis.value_dists(chosen_value_only=True)
 
-# Behavior_Analysis.value_dists()
+## Choice behav
+Behavior_Analysis.choice_behav()
 
+## Subsession vs FR
 # _ = SubsessionVsFR_Analysis()
 
 # plot_value_dist_unitlevel()
@@ -5623,11 +5757,13 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # behavior_checks()
 # behavior_checks_2()
 
+## Looking at all possible regressors
 # RA=Regressor_Analysis()
 # RA.calc_reg_metrics(metrics=['adj rsqr'])
 # RA.calc_reg_metrics(metrics=['rsqr'])
 # RA.get_reg_corr_matrix()
 
+## PCA
 # PCA=PCA_Analysis(overwrite_flag=False)
 # _=PCA.count_allPCs_encoding_type()
 # _=PCA.count_eachPC_encoding_type()
@@ -5635,10 +5771,12 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # PCA_Analysis.plot_PCA_trajs(list_of_sessions=SESSIONS,num_trials_to_plot=200)
 # PCA_Analysis.get_n_dims_pctvar_hist()
 
-
+## Get behavior exemplar plots
 # plot_behavior_new("braz20260824_03_te2584") # go to method and comment/uncomment plots you want to do
+# plot_behavior_new()
+plot_choice_vs_rewprob_vol_exemplar()
 
-
+## Dual vs Single LR
 # DvS = DualVsSingleAlpha_Analysis()
 # DvS.plot_rsqrs()
 # LearningRate_Analysis.get_rsqrs(do_even_num_trials=False)
@@ -5653,7 +5791,7 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # NT = NeuronType_Analysis(overwrite_flag=True)
 #regression_rsqr_table()
 
-# # Calculate Learning Rates
+## Learning Rates
 # LR = LearningRate_Analysis(overwrite_flag=True,do_even_num_trials=True
 # # Plot LRs
 # LR = LearningRate_Analysis(overwrite_flag=False)
@@ -5676,6 +5814,7 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # areas = ['OFC','OFC','OFC']
 # TemporalAnalysis.run_PCA(sessions,areas)
 
+## Grid search fr windows
 # ENCODING_WINDOWs = [(0.0,0.2),(0.0,0.4),(0.0,0.6)] #window over which neuron encoding is determined [s]
 # for ENCODING_WINDOW in ENCODING_WINDOWs:
 #     SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(True,False)
@@ -5687,9 +5826,9 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # if __name__ == "__main__":
 #     run_temporal_encodings_LFP()
 
-if __name__ == "__main__":
-   # NT = NeuronType_Analysis(overwrite_flag=True)
-   LR = LearningRate_Analysis(overwrite_flag=True)
+# if __name__ == "__main__":
+#    # NT = NeuronType_Analysis(overwrite_flag=True)
+#    LR = LearningRate_Analysis(overwrite_flag=True)
 
 # if __name__ == "__main__":
 #    # run_dual_vs_single_alpha_rsqr()

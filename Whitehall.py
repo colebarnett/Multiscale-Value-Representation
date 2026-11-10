@@ -1104,7 +1104,7 @@ class BehaviorPlots:
         self.session=session
         self.subsession=subsession
         session_idx = SESSIONS.index(session)
-        self.behavior_df = BEHAV_LIST[session_idx]
+        self.behavior_df = BEHAV_LIST[session_idx].behavior_df
         
         return
     
@@ -1127,64 +1127,32 @@ class BehaviorPlots:
         
         return
      
-    def plot_values(self,save_flag=False):
-        
-        fig,ax=plt.subplots(layout='constrained')
-        
-        #Q1 vs Q2
-        ax.plot(self.behavior_df['Q1'],color='red',label='Q1')
-        ax.plot(self.behavior_df['Q2'],color='green',label='Q2')
-        ax.legend()
-        ax.set_ylabel('Value')
-        ax.set_xlabel('Trials')
-        fig.suptitle(self.session)
-        
-        
-        # plot half of the trials on each axis
-        half = len(self.behavior_df['Q1']) //2
-        
-        fig,ax = plt.subplots(layout='constrained')
-        # ax=axs[0]
-        ax.plot(self.behavior_df['Q1'][:half],color='red',label='Q1')
-        ax.plot(self.behavior_df['Q2'][:half],color='green',label='Q2')
-        ax.legend()
-        ax.set_ylabel('Value')
-        # ax.set_xlabel('Trials')
-        
-        fig,ax = plt.subplots(layout='constrained')
-        x=np.arange(half,len(self.behavior_df['Q1']))
-        ax.plot(x,self.behavior_df['Q1'][half:],color='red',label='Q1')
-        ax.plot(x,self.behavior_df['Q2'][half:],color='green',label='Q2')
-        # ax.legend()
-        ax.set_ylabel('Value')
-        ax.set_xlabel('Trials')
-      
-        fig.suptitle(self.session)
-        
-        return fig   
+  
     
     
-    def plot_values_vs_choices_vs_rewprob(self,num_targs=1,num_trials_to_plot=200,save_flag=False):
+    def plot_values_vs_choices_vs_rewprob(self,num_targs=1,trials_to_plot=[0,60],save_flag=False):
+        start=trials_to_plot[0]
+        end=trials_to_plot[1]
         
         fig,ax=plt.subplots(layout='constrained')
         
         #actual rew prob
-        ax.plot(self.behavior_df['Rew_prob_1'].iloc[:num_trials_to_plot],color='k',linestyle='--',label='Reward Probability 1')
+        ax.plot(self.behavior_df['Rew_prob_1'].iloc[start:end],color='k',linestyle='--',label='Reward Probability 1')
         if num_targs==2:
-            ax.plot(self.behavior_df['Rew_prob_2'].iloc[:num_trials_to_plot],color='gray',linestyle='--',label='Reward Probability 2')
+            ax.plot(self.behavior_df['Rew_prob_2'].iloc[start:end],color='gray',linestyle='--',label='Reward Probability 2')
         
         #smoothed choice prob
         window_length=10
         P_LV = BehaviorAnalysis.trial_sliding_avg(self.behavior_df['Choice1'],window_length)
         P_HV = BehaviorAnalysis.trial_sliding_avg(1 - self.behavior_df['Choice1'],window_length)
-        ax.plot(P_LV[:num_trials_to_plot],color='red',label='Choice 1')
+        ax.plot(np.arange(start,end),P_LV[start:end],color='red',label='Choice 1')
         if num_targs==2:
-            ax.plot(P_HV[:num_trials_to_plot],color='green',label='Choice 2')
+            ax.plot(np.arange(start,end),P_HV[start:end],color='green',label='Choice 2')
             
         #Q-learning values
-        ax.plot(self.behavior_df['Q1'].iloc[:num_trials_to_plot],color='orange',label='Q1')
+        ax.plot(self.behavior_df['Q1'].iloc[start:end],color='orange',label='Q1')
         if num_targs==2:
-            ax.plot(self.behavior_df['Q2'].iloc[:num_trials_to_plot],color='turquoise',label='Q2')
+            ax.plot(self.behavior_df['Q2'].iloc[start:end],color='turquoise',label='Q2')
             
         #plot labels
         ax.set_title('Modeled Values vs Actual Choices vs Actual Rew Prob')
@@ -1211,11 +1179,17 @@ class BehaviorPlots:
         
         #smoothed choice prob
         window_length=10
-        P_LV = BehaviorAnalysis.trial_sliding_avg(self.behavior_df['Choice1'].iloc[start:end],window_length)
-        P_HV = BehaviorAnalysis.trial_sliding_avg(1 - self.behavior_df['Choice1'].iloc[start:end],window_length)
-        ax.plot(P_LV,color='red',label='Choice 1')
+        P_LV = BehaviorAnalysis.trial_sliding_avg(self.behavior_df['Choice1'],window_length)
+        P_HV = BehaviorAnalysis.trial_sliding_avg(1 - self.behavior_df['Choice1'],window_length)
+        ax.plot(np.arange(start,end),P_LV[start:end],color='red',label='Choice 1')
         if num_targs==2:
-            ax.plot(P_HV,color='green',label='Choice 2')
+            ax.plot(np.arange(start,end),P_HV[start:end],color='green',label='Choice 2')
+            
+        #shade every other block
+        edges = np.nonzero(np.diff(self.behavior_df['Rew_prob_1'].iloc[start:end]))[0]
+        y=[-0.05,1.05]
+        for edge_num in range(0,len(edges),2):
+            ax.fill_betweenx(y,edges[edge_num],edges[edge_num+1],color='k',alpha=0.15)
             
         #plot labels
         ax.set_title('Actual Choices vs Actual Rew Prob')
@@ -1229,22 +1203,81 @@ class BehaviorPlots:
         
         return fig
     
-    def plot_values_vs_choices(self,num_targs=1,num_trials_to_plot=200,save_flag=False):
-        
+    def plot_choices(self,num_targs=1,trials_to_plot=[0,200],save_flag=False):
+        start=trials_to_plot[0]
+        end=trials_to_plot[1]
         fig,ax=plt.subplots(layout='constrained')
         
         #smoothed choice prob
         window_length=10
         P_LV = BehaviorAnalysis.trial_sliding_avg(self.behavior_df['Choice1'],window_length)
         P_HV = BehaviorAnalysis.trial_sliding_avg(1 - self.behavior_df['Choice1'],window_length)
-        ax.plot(P_LV[:num_trials_to_plot],color='red',label='Choice 1')
+        ax.plot(np.arange(start,end),P_LV[start:end],color='red',label='Choice 1')
         if num_targs==2:
-            ax.plot(P_HV[:num_trials_to_plot],color='green',label='Choice 2')
+            ax.plot(np.arange(start,end),P_HV[start:end],color='green',label='Choice 2')
+        
+        #shade every other block
+        edges = np.nonzero(np.diff(self.behavior_df['Rew_prob_1'].iloc[start:end]))[0]
+        y=[-0.05,1.05]
+        for edge_num in range(0,len(edges),2):
+            ax.fill_betweenx(y,edges[edge_num],edges[edge_num+1],color='k',alpha=0.15)
+            
+        #plot labels
+        ax.set_title('Actual Choices')
+        ax.legend()
+        ax.set_xlabel('Trials')
+        ax.set_ylim(y)
+        
+        fig.suptitle(f'{self.session}\n{VALUE_MODEL}')
+        
+        if save_flag:
+            utils.save_svg(fig,self.session,'Choices',PROJ_FOLDER)
+        
+        return fig    
+    
+    
+
+    def plot_rewprob(self,num_targs=1,trials_to_plot=[0,200],save_flag=False):
+        start=trials_to_plot[0]
+        end=trials_to_plot[1]
+        fig,ax=plt.subplots(layout='constrained')
+        
+        #actual rew prob
+        ax.plot(self.behavior_df['Rew_prob_1'].iloc[start:end],color='k',linestyle='--',label='Reward Probability 1')
+        if num_targs==2:
+            ax.plot(self.behavior_df['Rew_prob_2'].iloc[start:end],color='gray',linestyle='--',label='Reward Probability 2')
+
+            
+        #plot labels
+        ax.set_title('Actual Choices vs Actual Rew Prob')
+        ax.legend()
+        ax.set_xlabel('Trials')
+        
+        fig.suptitle(f'{self.session}\n{VALUE_MODEL}')
+        
+        if save_flag:
+            utils.save_svg(fig,self.session,'RewProb',PROJ_FOLDER)
+        
+        return fig
+
+    
+    def plot_values_vs_choices(self,num_targs=1,trials_to_plot=[0,200],save_flag=False):
+        start=trials_to_plot[0]
+        end=trials_to_plot[1]
+        fig,ax=plt.subplots(layout='constrained')
+        
+        #smoothed choice prob
+        window_length=10
+        P_LV = BehaviorAnalysis.trial_sliding_avg(self.behavior_df['Choice1'],window_length)
+        P_HV = BehaviorAnalysis.trial_sliding_avg(1 - self.behavior_df['Choice1'],window_length)
+        ax.plot(np.arange(start,end),P_LV[start:end],color='red',label='Choice 1')
+        if num_targs==2:
+            ax.plot(np.arange(start,end),P_HV[start:end],color='green',label='Choice 2')
             
         #Q-learning values
-        ax.plot(self.behavior_df['Q1'].iloc[:num_trials_to_plot],color='orange',label='Q1')
+        ax.plot(self.behavior_df['Q1'].iloc[start:end],color='orange',label='Q1')
         if num_targs==2:
-            ax.plot(self.behavior_df['Q2'].iloc[:num_trials_to_plot],color='turquoise',label='Q2')
+            ax.plot(self.behavior_df['Q2'].iloc[start:end],color='turquoise',label='Q2')
             
         #plot labels
         ax.set_title('Modeled Values vs Actual Choices')
@@ -1259,17 +1292,18 @@ class BehaviorPlots:
         return fig
     
     
-    def plot_values_vs_rewards(self,num_targs=2,num_trials_to_plot=200,save_flag=False):
-        
+    def plot_values_vs_rewards(self,num_targs=2,trials_to_plot=[0,200],save_flag=False):
+        start=trials_to_plot[0]
+        end=trials_to_plot[1]
         fig,ax=plt.subplots(layout='constrained')
             
         #Q-learning values
-        ax.plot(self.behavior_df['Q1'].iloc[:num_trials_to_plot],color='orange',label='Q1')
+        ax.plot(self.behavior_df['Q1'].iloc[start:end],color='orange',label='Q1')
         if num_targs==2:
-            ax.plot(self.behavior_df['Q2'].iloc[:num_trials_to_plot],color='turquoise',label='Q2')
+            ax.plot(self.behavior_df['Q2'].iloc[start:end],color='turquoise',label='Q2')
             
         #Rewards
-        for trial in range(num_trials_to_plot):
+        for trial in np.arange(start,end):
             if self.behavior_df['Choice1'].iloc[trial] == 1:
                 if self.behavior_df['Reward'].iloc[trial] == 1:
                     ax.plot(trial,self.behavior_df['Q1'].iloc[trial],color='orange',marker='^') #rewarded choice1s
@@ -1301,20 +1335,50 @@ class BehaviorPlots:
         
         return fig,ax
     
-    
-    def plot_values_vs_rewprob(self,num_targs=2,num_trials_to_plot=200,save_flag=False):
-
+    def plot_values(self,num_targs=2,trials_to_plot=[0,200],save_flag=False):
+        start=trials_to_plot[0]
+        end=trials_to_plot[1]
         fig,ax=plt.subplots(layout='constrained')
         
         #Q-learning values
-        ax.plot(self.behavior_df['Q1'].iloc[:num_trials_to_plot],color='red',label='Q1')
+        ax.plot(self.behavior_df['Q1'].iloc[start:end],color='red',label='Q1')
         if num_targs==2:
-            ax.plot(self.behavior_df['Q2'].iloc[:num_trials_to_plot],color='green',label='Q2')
+            ax.plot(self.behavior_df['Q2'].iloc[start:end],color='green',label='Q2')
+        
+        #shade every other block
+        edges = np.nonzero(np.diff(self.behavior_df['Rew_prob_1'].iloc[start:end]))[0]
+        y=[-0.05,1.05]
+        for edge_num in range(0,len(edges),2):
+            ax.fill_betweenx(y,edges[edge_num],edges[edge_num+1],color='k',alpha=0.15)
+        
+        #plot labels
+        ax.set_title('Modeled Values vs Actual Reward Probability')
+        ax.legend()
+        ax.set_xlabel('Trials')
+        ax.set_ylabel('Value')
+        
+        fig.suptitle(f'{self.session}\n{VALUE_MODEL}')   
+        
+        if save_flag:
+            utils.save_svg(fig,self.session,'ValueVsRewProb',PROJ_FOLDER)
+        
+        return fig,ax
+
+    
+    def plot_values_vs_rewprob(self,num_targs=2,trials_to_plot=[0,200],save_flag=False):
+        start=trials_to_plot[0]
+        end=trials_to_plot[1]
+        fig,ax=plt.subplots(layout='constrained')
+        
+        #Q-learning values
+        ax.plot(self.behavior_df['Q1'].iloc[start:end],color='red',label='Q1')
+        if num_targs==2:
+            ax.plot(self.behavior_df['Q2'].iloc[start:end],color='green',label='Q2')
         
         #actual rew prob
-        ax.plot(self.behavior_df['Rew_prob_1'].iloc[:num_trials_to_plot],color='red',linestyle='--',label='Reward Probability 1')
+        ax.plot(self.behavior_df['Rew_prob_1'].iloc[start:end],color='red',linestyle='--',label='Reward Probability 1')
         if num_targs==2:
-            ax.plot(self.behavior_df['Rew_prob_2'].iloc[:num_trials_to_plot],color='green',linestyle='--',label='Reward Probability 2')
+            ax.plot(self.behavior_df['Rew_prob_2'].iloc[start:end],color='green',linestyle='--',label='Reward Probability 2')
         
         #plot labels
         ax.set_title('Modeled Values vs Actual Reward Probability')
@@ -1448,108 +1512,7 @@ class BehaviorPlots:
         
         return #kurt_vol,kurt_stab
     
-    
-    def plot_choices_and_rewards(self,save_flag=False):
-            
-        color1 = 'gold'
-        color2 = 'blue'
-        
-        ## choice behavior and rewards figure for Fig 1
-        #smooth choice data 
-        window_length=50
-        P_LV = BehaviorAnalysis.trial_sliding_avg(self.behavior_df['Choice1'],window_length)
-        P_HV = BehaviorAnalysis.trial_sliding_avg(1 - self.behavior_df['Choice1'],window_length)
 
-        fig,ax = plt.subplots(layout='constrained')
-
-        ax.plot(P_LV,color=color1,label='Target 1')
-        ax.plot(P_HV,color=color2,label='Target 2')
-
-        #Get reward data for each choice
-        LV_rew = np.nonzero((self.behavior_df['Choice1']==1) & (self.behavior_df['Reward']==1))
-        LV_unrew = np.nonzero((self.behavior_df['Choice1']==1) & (self.behavior_df['Reward']==0))
-        HV_rew = np.nonzero((self.behavior_df['Choice1']!=1) & (self.behavior_df['Reward']==1))
-        HV_unrew = np.nonzero((self.behavior_df['Choice1']!=1) & (self.behavior_df['Reward']==0))
-
-        ymin_hi, ymax_hi = 1.1, 1.2 #for rewarded trials
-        ymin_lo, ymax_lo = -0.2, -0.1 #for unrewarded trials
-
-        ax.vlines(LV_rew,ymin_hi,ymax_hi,color=color1)
-        ax.vlines(LV_unrew,ymin_lo,ymax_lo,color=color1)
-        ax.vlines(HV_rew,ymin_hi,ymax_hi,color=color2)
-        ax.vlines(HV_unrew,ymin_lo,ymax_lo,color=color2)
-        
-        tick_marks = [np.mean([ymin_lo,ymax_lo]),0,0.25,0.5,0.75,1,np.mean([ymin_hi,ymax_hi])]
-        tick_labels = ['Unrewarded',0,0.25,0.5,0.75,1,'Rewarded']
-        ax.set_yticks(tick_marks,tick_labels)
-        
-        ax.set_ylabel('Choice Probability')
-        ax.set_xlabel('Trials')
-        
-        # ax.set_xlim([0,1000])
-
-        ax.legend()
-        ax.set_title(self.session)
-        
-        
-        if save_flag:
-            utils.save_svg(fig,self.session,'ChoiceAndRewardBehavior',PROJ_FOLDER)
-            
-        return fig    
-    
-    def plot_choices(self,save_flag=False):
-        
-        color1 = 'gold'
-        color2 = 'blue'
-        
-        ## choice behavior and rewards figure for Fig 1
-        #smooth choice data 
-        window_length=50
-        P_LV = BehaviorAnalysis.trial_sliding_avg(self.behavior_df['Choice1'],window_length)
-        P_HV = BehaviorAnalysis.trial_sliding_avg(1 - self.behavior_df['Choice1'],window_length)
-
-        fig,ax = plt.subplots(layout='constrained')
-
-        ax.plot(P_LV,color=color1,label='Target 1')
-        ax.plot(P_HV,color=color2,label='Target 2')
-
-        tick_marks = [0,0.25,0.5,0.75,1]
-        tick_labels = [0,0.25,0.5,0.75,1]
-        ax.set_yticks(tick_marks,tick_labels)
-        
-        ax.set_ylabel('Choice Probability')
-        ax.set_xlabel('Trials')
-        
-        
-        def blocks_volatile_first():
-            vol_block_edges = np.arange(0,24*20,20)
-            stab_block_edges = np.arange(vol_block_edges[-1],vol_block_edges[-1]+6*100,100)
-            edges = np.concat((vol_block_edges,stab_block_edges))
-            return edges
-        
-        edges = blocks_volatile_first()
-        # ax.vlines(edges,0,1)
-        every_other_edge = edges[::2]
-        y=[0,1]
-        for edge_num in range(len(edges)//2-1):
-            ax.fill_betweenx(y,edges[edge_num*2],edges[edge_num*2+1],color='k',alpha=0.1)
-        
-        # ax.set_xlim([0,1000])
-
-        ax.legend()
-        ax.set_title(self.session)
-        
-        
-        if save_flag:
-            utils.save_svg(fig,self.session,'ChoiceBehavior',PROJ_FOLDER)
-            # fname=f'{self.file_prefix}_choice_behav.svg'
-            # plt.savefig(fname,format='svg')
-            # print(f'{fname} saved!')
-            
-        
-        
-        
-        return fig
     
     
     def get_behavior_var_corr(self,list_of_vars):
@@ -1795,14 +1758,14 @@ class LearningRate_Analysis:
                                     # take lr and value type if it yields the best rsqr so far, otherwise continue on
                                     if res.rsquared > best_rsqr:
                                         best_rsqr = res.rsquared
-                                        best_learning_rate = [pos_alpha,neg_alpha]
+                                        best_learning_rates = [pos_alpha,neg_alpha]
                                         neuron_type = value_type
                                         
                     #save out info for unit
                     lr_row_dict = {'Unit':f'{unit} - {stable_or_volatile}',
                                    'Neuron Type': neuron_type,
-                                   'Pos Learning Rate': best_learning_rate[0],
-                                   'Neg Learning Rate': best_learning_rate[1],
+                                   'Pos Learning Rate': best_learning_rates[0],
+                                   'Neg Learning Rate': best_learning_rates[1],
                                    'R-Squared': best_rsqr}
                     df_rows_learning_rates.append(lr_row_dict)
                     
@@ -4032,14 +3995,53 @@ class Behavior_Analysis:
         return
 
 
-
-
-
-
-
-
-
+def plot_tuning_curves_value(fr_df,behavior_df,learning_rate_df):
+    assert len(fr_df) == len(behavior_df)
     
+    units = list(fr_df.keys())
+    
+    if len(units) < 1:
+        return None #skip whole thing if there aren't any units for this session
+    
+    for i,unit in enumerate(units): #loop thru all units of session
+    
+        neuron_type = str(utils.get_unit_data(learning_rate_df,unit+' - all trials','Neuron Type'))
+        # print(unit)
+        # print(neuron_type)
+        
+        if 'Q' not in neuron_type: #only do for value neurons
+            continue
+        
+        if 'Unit A' in unit: #exclude vmPFC
+            continue
+        
+        #get values relevant to neuron type
+        values = behavior_df[neuron_type]
+        
+        #find the trials corresponding to value bins, then get values and frs of those trials
+        value_bins = np.linspace(0, 1, 6)
+        binned_value_avg = np.zeros(len(value_bins)-1)
+        binned_value_sem = np.zeros_like(binned_value_avg)
+        binned_fr_avg = np.zeros_like(binned_value_avg)
+        binned_fr_sem = np.zeros_like(binned_value_avg)
+        for j, (bot, top) in enumerate(zip(value_bins[:-1], value_bins[1:])):
+            trials = np.nonzero((values>bot)&(values<top))[0]
+            binned_value_avg[j], binned_value_sem[j] = utils.get_avg_sem(values.iloc[trials])
+            binned_fr_avg[j], binned_fr_sem[j] = utils.get_avg_sem(fr_df[unit].iloc[trials])
+        
+        #plotit
+        fig,ax = plt.subplots(layout="constrained")
+        ax.errorbar(binned_value_avg, binned_fr_avg, xerr=binned_value_sem, yerr=binned_fr_sem,color='k')
+        ax.scatter(values,fr_df[unit],alpha=0.05,color='k')
+        ax.set_xlabel(neuron_type)
+        ax.set_ylabel('Z-scored FR')
+        ax.set_title('Value encoding tuning curve')
+        
+        fig.suptitle(f'{unit}\n{neuron_type} encoding unit')
+        plt.show()
+    
+    
+    return    
 
 
 
@@ -5593,14 +5595,17 @@ def plot_choice_vs_rewprob_vol_exemplar():
     
     session = "braz20260824_03_te2584"
     
-    BehaviorPlots(sess)
+    bp=BehaviorPlots(session,'all trials')
+    # bp.plot_choices_vs_rewprob(num_targs=1,trials_to_plot=[0,300],save_flag=False)
+    # bp.plot_choices_vs_rewprob(num_targs=1,trials_to_plot=[480,780],save_flag=False)
+    # # bp.plot_choices_vs_rewprob(num_targs=1,trials_to_plot=[0,1080],save_flag=False)
+    # # bp.plot_rewprob(num_targs=2,trials_to_plot=[0,1080],save_flag=False)
+    # bp.plot_choices(num_targs=1,trials_to_plot=[0,1080],save_flag=False)
     
-    for s,session in enumerate(SESSIONS):
+    bp.plot_values_vs_choices_vs_rewprob(num_targs=1,trials_to_plot=[0,100],save_flag=False)
+    bp.plot_values_vs_rewards(num_targs=1,trials_to_plot=[0,100],save_flag=False)
+    bp.plot_values(num_targs=1,trials_to_plot=[0,1080],save_flag=False)
 
-        if session == session_to_plot:    
-            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-            Behav.plot_choices_vs_rewprob(num_targs=1,trials_to_plot=[0,300],save_flag=False)
-            Behav.plot_choices_vs_rewprob(num_targs=1,trials_to_plot=[1280,1580],save_flag=False)
     return
 
 def plot_behavior_new(session_to_plot=''):  
@@ -5744,7 +5749,7 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # plot_behavior()
 
 ## Value distributions
-Behavior_Analysis.value_dists(chosen_value_only=True)
+# Behavior_Analysis.value_dists(chosen_value_only=True)
 
 ## Choice behav
 Behavior_Analysis.choice_behav()

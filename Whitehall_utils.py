@@ -69,13 +69,13 @@ def get_block_borders(behavior_df):
     borders = np.nonzero(np.diff(behavior_df['Rew_prob_1']))[0]
     return borders
 
-def get_trials_rewprob_volatility(df,stable_or_volatile,rew_prob): 
+def get_trials_rewprob_volatility(df,stable_or_volatile,rew_prob1): 
     if stable_or_volatile == 'all trials':
-        return list(df.loc[(np.isclose(df['Rew_prob_1'],rew_prob))].index)
+        return list(df.loc[(np.isclose(df['Rew_prob_1'],rew_prob1))].index)
     elif stable_or_volatile == 'stable block':
-        return list(df.loc[(df['Stable']==1) & (np.isclose(df['Rew_prob_1'],rew_prob))].index)
+        return list(df.loc[(df['Stable']==1) & (np.isclose(df['Rew_prob_1'],rew_prob1))].index)
     elif stable_or_volatile == 'volatile block':
-        return list(df.loc[(df['Volatile']==1) & (np.isclose(df['Rew_prob_1'],rew_prob))].index)
+        return list(df.loc[(df['Volatile']==1) & (np.isclose(df['Rew_prob_1'],rew_prob1))].index)
     else:
         raise ValueError("Invalid value for stable_or_volatile")
 
@@ -92,7 +92,6 @@ def get_trials_rewprob_volatility_Qchosen(df,stable_or_volatile,rew_prob):
     else:
         raise ValueError("Invalid value for stable_or_volatile")
     return list1 + list2
-
    
 def area_parser(df_or_dict,brain_area):
     
@@ -272,11 +271,23 @@ def linear_encoding_regression(spikes,behavior):
     
     # zscore behavior without losing column titles if possible
     if isinstance(behavior, (pd.DataFrame, pd.Series)):
-        behavior = (behavior - behavior.mean()) / behavior.std()
+        behavior_zscr = (behavior - behavior.mean()) / behavior.std()
     else:
-        behavior = zscore(behavior,axis=0)
-        
-    model = sm.OLS(zscore(spikes,axis=0), sm.add_constant(behavior,has_constant='add'), missing='raise',hasconst=True)
+        behavior_zscr = zscore(behavior,axis=0)
+    
+    # try:
+    #     model = sm.OLS(zscore(spikes,axis=0), sm.add_constant(behavior,has_constant='add'), missing='raise',hasconst=True)
+    # except:
+    #     print(behavior)
+    #     print(zscore(spikes,axis=0))
+    #     xxx
+    
+    try:
+        model = sm.OLS(zscore(spikes,axis=0), sm.add_constant(behavior_zscr,has_constant='add'), missing='raise',hasconst=True)
+    except: 
+        print(behavior)
+        print(spikes)
+        raise ValueError
     # #Variance inflation factor analysis
     # vif = np.array([variance_inflation_factor(behavior, i) for i in range(np.shape(behavior)[0])])
     # vif_threshold = 5

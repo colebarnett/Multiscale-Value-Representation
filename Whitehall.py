@@ -125,154 +125,42 @@ from TwoStageQLearning_BaselineSide import Calc_DistrQlearning_2Targs_BaselineSi
 TEST = False
 SUBSESSIONS = ['all trials','stable block','volatile block']
 
-# SESSIONS = ['braz20240927_01_te5384',
-#             'braz20241001_03_te5390',
-#             'braz20241002_04_te5394',
-#             'braz20241004_02_te5396',
-#             #'braz20250221_03_te1873', #I can't remember why this is commented out
-#             'braz20250225_04_te1880',
-#             #'braz20250228_03_te1888', #has units with 300 Hz FR ?
-#             #'braz20250327_04_te1927', #same ^
-#             #'braz20250326_04_te1923' #commented out for code to run quicker
-#             ]
-
-# SESSIONS = [ # 11 sessions with spike and lfp data for prelim testing
-#             "airp20250919_02_te2177",  
-#             "airp20251015_04_te2206",
-#             "airp20251016_03_te2209",
-#             "airp20251020_05_te2214",
-#             "airp20251021_02_te2216",
-#             "airp20251023_03_te2219",
-#             "airp20251028_03_te2226",
-#             "airp20251029_05_te2231",
-#             "airp20251030_02_te2233",
-#             "airp20251104_02_te2242", 
-#             "airp20251111_02_te2250"
-#             ]
-
-# SESSIONS = [ # 35 sessions. Full dataset as of 5/1/26
-#             "airp20250602_03_te2003",
-#             "airp20250604_08_te2011",
-#             "airp20250617_03_te2031",
-#             "airp20250618_03_te2034",
-#             "airp20250626_03_te2049",
-#             "airp20250701_06_te2058",
-#             "airp20250826_05_te2135",
-#             "airp20250904_03_te2147",
-#             "airp20250910_02_te2156",
-#             "airp20250912_02_te2160",
-#             "airp20250919_02_te2177",
-#             "airp20251007_02_te2198",
-#             "airp20251008_02_te2200",
-#             "airp20251015_04_te2206",
-#             "airp20251016_03_te2209",
-#             "airp20251020_05_te2214",
-#             "airp20251021_02_te2216",
-#             # "airp20251023_03_te2219", no good units
-#             "airp20251028_03_te2226",
-#             "airp20251029_05_te2231",
-#             "airp20251030_02_te2233",
-#             "airp20251104_02_te2242",
-#             "airp20251111_02_te2250",
-#             # "airp20260224_03_te2287", no good units
-#             "airp20260302_03_te2302",
-#             "airp20260303_02_te2304",
-#             "airp20260305_12_te2321",
-#             # "airp20260310_03_te2324", no good units and Cd probe was lifted out. do not use for LFP either.
-#             # "airp20260311_03_te2327", no good units
-#             # "airp20260403_03_te2337", no good units
-#             "airp20260406_03_te2340",
-#             "airp20260408_03_te2343",
-#             # "airp20260409_03_te2346", no good units
-#             "airp20260414_03_te2352",
-#             "airp20260415_03_te2355"
-#             ]
-
-# SESSIONS = [ #since reaiming and new s-probe
-#             "airp20260708_05_te2496",
-#             "airp20260630_04_te2468",
-#             "airp20260625_05_te2453",
-#             "airp20260624_06_te2448"
-#             ]
-
-# SESSIONS = [ #all airport
-#             "airp20250602_03_te2003",
-#             # "airp20250604_08_te2011", too few trials
-#             "airp20250617_03_te2031",
-#             "airp20250618_03_te2034",
-#             "airp20250626_03_te2049",
-#             "airp20250701_06_te2058",
-#             "airp20250826_05_te2135",
-#             "airp20250904_03_te2147",
-#             "airp20250910_02_te2156",
-#             "airp20250912_02_te2160",
-#             "airp20250919_02_te2177",
-#             "airp20251007_02_te2198",
-#             "airp20251008_02_te2200",
-#             # "airp20251015_04_te2206", too few trials
-#             "airp20251016_03_te2209",
-#             "airp20251020_05_te2214",
-#             "airp20251021_02_te2216",
-#             "airp20251023_03_te2219", #no good units
-#             "airp20251028_03_te2226",
-#             "airp20251029_05_te2231",
-#             "airp20251030_02_te2233",
-#             "airp20251104_02_te2242",
-#             "airp20251111_02_te2250",
-#             "airp20260224_03_te2287", #no good units
-#             "airp20260302_03_te2302",
-#             # "airp20260303_02_te2304", too few trials
-#             "airp20260305_12_te2321",
-#             "airp20260310_03_te2324", #no good units and Cd probe was lifted out. do not use for LFP either.
-#             "airp20260311_03_te2327", #no good units
-#             "airp20260403_03_te2337", #no good units
-#             "airp20260406_03_te2340",
-#             "airp20260408_03_te2343",
-#             #"airp20260409_03_te2346", #no good units, did not finish task
-#             "airp20260414_03_te2352",
-#             "airp20260415_03_te2355",
-#             "airp20260708_05_te2496",
-#             "airp20260630_04_te2468",
-#             "airp20260625_05_te2453",
-#             "airp20260624_06_te2448",
-#             ]
-
 SESSIONS = [
             "braz20260728_03_te2536",
             "braz20260729_03_te2539",
             "braz20260730_03_te2542",
-            "braz20260731_03_te2545",
-            "braz20260803_03_te2548",
-            "braz20260804_03_te2551",
-            "braz20260805_03_te2554",
-            "braz20260806_03_te2557",
-            "braz20260810_03_te2560",
-            # "braz20260811_03_te2563", #too few trials (1044), excluded
-            # "braz20260812_03_te2566", #too few trials (939), excluded
-            "braz20260813_03_te2569", 
-            "braz20260814_03_te2572", 
-            "braz20260817_03_te2575", 
-            "braz20260818_03_te2578", 
-            "braz20260821_03_te2581", 
-            "braz20260824_03_te2584", 
-            "braz20260827_03_te2587",
-            # "braz20260828_03_te2590", #too few trials (1039), excluded
-            "braz20260901_03_te2593",
-            "braz20260902_03_te2596",
-            "braz20260908_03_te2599",
-            "braz20260909_03_te2602",
-            "braz20260910_03_te2605",
-            "braz20260911_03_te2608",
-            "braz20260915_05_te2613",
-            "braz20260916_03_te2616",
-            "braz20260918_03_te2619",
-            "braz20260924_03_te2622",
-            "braz20260925_03_te2625",
-            "braz20261001_03_te2628",
-            # # # "braz20261002_05_te2633", #too few trials (747), excluded
-            "braz20261007_03_te2636",
-            # # "braz20261008_03_te2639", #too few trials (845), excluded
-            # # "braz20261009_03_te2642", #too few trials (1041), excluded
+            # "braz20260731_03_te2545",
+            # "braz20260803_03_te2548",
+            # "braz20260804_03_te2551",
+            # "braz20260805_03_te2554",
+            # "braz20260806_03_te2557",
+            # "braz20260810_03_te2560",
+            # # "braz20260811_03_te2563", #too few trials (1044), excluded
+            # # "braz20260812_03_te2566", #too few trials (939), excluded
+            # "braz20260813_03_te2569", 
+            # "braz20260814_03_te2572", 
+            # "braz20260817_03_te2575", 
+            # "braz20260818_03_te2578", 
+            # "braz20260821_03_te2581", 
+            # "braz20260824_03_te2584", 
+            # "braz20260827_03_te2587",
+            # # "braz20260828_03_te2590", #too few trials (1039), excluded
+            # "braz20260901_03_te2593",
+            # "braz20260902_03_te2596",
+            # "braz20260908_03_te2599",
+            # "braz20260909_03_te2602",
+            # "braz20260910_03_te2605",
+            # "braz20260911_03_te2608",
+            # "braz20260915_05_te2613",
+            # "braz20260916_03_te2616",
+            # "braz20260918_03_te2619",
+            # "braz20260924_03_te2622",
+            # "braz20260925_03_te2625",
+            # "braz20261001_03_te2628",
+            # # # # "braz20261002_05_te2633", #too few trials (747), excluded
+            # "braz20261007_03_te2636",
+            # # # "braz20261008_03_te2639", #too few trials (845), excluded
+            # # # "braz20261009_03_te2642", #too few trials (1041), excluded
             ]
 
 QCHOSEN_REGRESSORS = [
@@ -291,7 +179,7 @@ QCHOSEN_REGRESSORS = [
                     'Time',
                     # 'Time x Time',
                     # 'Log_Time',
-                    'State ⊥ Time',
+                    # 'State ⊥ Time',
                     # 'RPE',
                     # 'absRPE',
                     # 'Prev_Reward',
@@ -315,7 +203,7 @@ Q1_REGRESSORS = [
                     'Time',
                     # 'Time x Time',
                     # 'Log_Time',
-                    'State ⊥ Time',
+                    # 'State ⊥ Time',
                     # 'RPE',
                     # 'absRPE',
                     # 'Prev_Reward',
@@ -339,7 +227,7 @@ Q2_REGRESSORS = [
                     'Time',
                     # 'Time x Time',
                     # 'Log_Time',
-                    'State ⊥ Time',
+                    # 'State ⊥ Time',
                     # 'RPE',
                     # 'absRPE',
                     # 'Prev_Reward',
@@ -947,7 +835,7 @@ class ProcessBehavior:
             is_stable_block, is_volatile_block = is_stable_block[:len(choices)], is_volatile_block[:len(choices)] #trim to actual num of trials
 
         # Actual reward probability of each target throughout task
-        rew_probs_2, rew_probs_1 = behavior.GetRewardProbability(is_stable_block)
+        rew_probs_2, rew_probs_1 = behavior.reward_probabiltyH, behavior.reward_probabiltyL
         
         # Get which side (left or right) each choice was
         choice_side_raw = behavior.GetTargetSideSelection()
@@ -982,8 +870,8 @@ class ProcessBehavior:
         state = np.where(is_stable_block,-1,1)
         
         
-        # Calculate value of targets throughout trials
-        if Q_learning and learning_rates: #to do a specific learning rate (uses modified version of Rishi's method)
+        # Calculate value of targets throughout trial
+        if Q_learning and learning_rates is not None: #to do a specific learning rate (uses modified version of Rishi's method)
             beta=1 #beta doesn't matter since we are only interested in value here
             kappa=1 #same for kappa ^^
             Q0 = 0.5*np.ones(2)
@@ -1623,13 +1511,19 @@ class LearningRate_Analysis:
             
         # Plot
         # self.plot_learning_rate_dual_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        # self.plot_learning_rate_dual_hists_new(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_dual_hists_new(self.allsess_lr_df,suptitle,self.fig_folder)
         # self.plot_learning_rate_single_hists_new(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
         # self.plot_winbias_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
         # self.plot_learning_rate_scatter_1(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
         # self.plot_learning_rate_scatter_2(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
         # self.plot_learning_rate_scatter_all_combined(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
         # self.plot_winbias_hist(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        
+        # self.plot_learning_rate_hist_neuron_type(self.allsess_lr_df,'Qchosen','Qchosen - all sess',self.fig_folder)
+        # self.plot_learning_rate_hist_neuron_type(self.allsess_lr_df,'Q1','Q1 - all sess',self.fig_folder)
+        # self.plot_learning_rate_hist_neuron_type(self.allsess_lr_df,'Q2','Q2 - all sess',self.fig_folder)
+        
+        self.plot_lr_vs_rsqr(self.allsess_lr_df)
         
         return 
         
@@ -1672,6 +1566,113 @@ class LearningRate_Analysis:
     
     
 
+    @staticmethod    
+    def get_learning_rates_optimizer(fr_df,Behavior,do_even_num_trials):
+
+        
+        def lr_reg(lrs,Behavior,fr,trials,value_type):    
+            
+            Behavior.get_behavior(Q_learning=True, learning_rates=lrs)
+            regressor_matrix = Behavior.behavior_df[REGRESSOR_SUPERSET_DICT[value_type]].iloc[trials]
+            res = utils.linear_encoding_regression(fr, regressor_matrix)
+            
+            return res
+
+        def lr_reg_is_signif(lrs,Behavior,fr,trials,value_type):
+            
+            res = lr_reg(lrs,Behavior,fr,trials,value_type)
+            
+            is_signif = (res.f_pvalue < ALPHA_THRESHOLD) and (res.pvalues[value_type] < ALPHA_THRESHOLD)
+            
+            return is_signif
+
+        print(f'{len(fr_df.columns)} neurons')
+        
+        df_rows_learning_rates = [] #to save out info in a df
+        for stable_or_volatile in SUBSESSIONS:        
+        
+            assert len(Behavior.behavior_df) == len(fr_df), 'Number of trials do not match!'
+            
+            if do_even_num_trials:
+                trials = utils.get_trials_even_num(Behavior.behavior_df,stable_or_volatile)
+            else:
+                trials = utils.get_trials(Behavior.behavior_df,stable_or_volatile)
+        
+            if not len(trials) > 1: #if no trials for current subsession
+                print(f'No trials for {stable_or_volatile}. Skipping!')    
+                continue
+            else:
+                print(stable_or_volatile)
+        
+            # Get FR for each neuron
+            units = fr_df.columns
+            for i,unit in enumerate(units):
+                
+                start = time.time()
+                
+                fr = fr_df[unit].iloc[trials] #vector of FRs for subsession trial
+                
+                
+                
+                # def nll_fast(lrs,Behavior,fr,trials,value_type):
+                #     y=fr
+                #     Behavior.get_behavior(Q_learning=True, learning_rates=lrs)
+                #     X = Behavior.behavior_df[REGRESSOR_SUPERSET_DICT[value_type]].to_numpy()[trials]
+                #     X = np.column_stack([np.ones(len(X)), X])   # only if linear_encoding_regression adds a constant
+                #     beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+                #     rss = np.sum((y - X @ beta) ** 2)
+                #     n = len(y)
+                #     return 0.5 * n * (np.log(2 * np.pi) + np.log(rss / n) + 1)   # identical to -statsmodels .llf
+
+                ## For each regressor set, get best LRs based on log likelihood
+                nll_out_dict={}
+                lr_out_dict={}
+                for value_type,regressors in REGRESSOR_SUPERSET_DICT.items():
+                    nll = lambda *args: -1*lr_reg(*args).llf
+                    # nll = lambda *args: nll_fast(*args)
+                    x0 = [0.5, 0.5]  # [pos_alpha, neg_alpha]
+                    result_A = sp.optimize.minimize(nll, x0, 
+                    		   args=(Behavior,fr,trials,value_type),
+                    		   bounds=[(0.01,1), (0.01,1)],
+                    		   method='L-BFGS-B',
+                               tol=1e-3)
+                    pos_alpha, neg_alpha = result_A["x"]
+                    lr_out_dict[value_type] = [pos_alpha,neg_alpha]
+                    nll_out_dict[value_type] = -1*lr_reg(lr_out_dict[value_type],Behavior,fr,trials,value_type).llf
+                    
+                    
+                ## Find best regressor set based on log likelihood
+                best_ll_valuetype = min(nll_out_dict, key=nll_out_dict.get) #get which set of regressors had highest likelihood (min neg ll)
+                best_value_type_lrs = lr_out_dict[best_ll_valuetype] #get lrs of that set of regressors
+
+                #if best regressor set is signif and if value reg is signif, then mark as encoding. If not, mark as non-encoding
+                is_signif = lr_reg_is_signif(best_value_type_lrs,Behavior,fr,trials,best_ll_valuetype)
+                if is_signif:
+                    neuron_type = best_ll_valuetype
+                    best_learning_rates = best_value_type_lrs
+                    best_rsqr = lr_reg(best_learning_rates,Behavior,fr,trials,neuron_type).rsquared
+                if not is_signif:
+                    neuron_type = 'none'
+                    best_learning_rates = ['none','none']
+                    best_rsqr = 'none'
+
+                #save out info for unit
+                lr_row_dict = {'Unit':f'{unit} - {stable_or_volatile}',
+                               'Neuron Type': neuron_type,
+                               'Pos Learning Rate': best_learning_rates[0],
+                               'Neg Learning Rate': best_learning_rates[1],
+                               'R-Squared': best_rsqr}
+                df_rows_learning_rates.append(lr_row_dict)
+                
+                print(lr_row_dict)
+                    
+                utils.get_time_left(start,i,len(units))
+                                
+        learning_rate_df = pd.DataFrame(df_rows_learning_rates) #rows: units x subsessions, cols: lrs for each reg
+        # utils.save_csv(learning_rate_df,'LR',"debug",DATA_FOLDER)
+
+        return learning_rate_df
+    
     
     @staticmethod    
     def get_learning_rates(fr_df,Behavior,do_even_num_trials):
@@ -2553,7 +2554,7 @@ class LearningRate_Analysis:
 
 
 
-    def plot_learning_rate_dual_hists_new(self, learning_rate_df, neuron_type_df, suptitle, fig_folder):
+    def plot_learning_rate_dual_hists_new(self, learning_rate_df, suptitle, fig_folder):
     
         cols = learning_rate_df.columns
         # areas = AREAS + ['all areas']
@@ -2826,6 +2827,147 @@ class LearningRate_Analysis:
                 
                 
         return    
+
+    @staticmethod
+    def plot_lr_vs_rsqr(learning_rate_df,suptitle):
+        # areas = AREAS + ['all areas']
+        areas = AREAS
+        # cols = ['Learning Rate for Qchosen']
+        
+        for i, area in enumerate(areas):
+        
+            # area_neuron_type_df = utils.area_parser(neuron_type_df, area)
+            df = utils.area_parser(learning_rate_df, area)
+            df = df[df['Neuron Type'].str.contains('Q')
+            
+            rsqrs = pd.to_numeric(df['R-Squared'].values)
+            rsqrs = rsqrs[~np.isnan(rsqrs)]
+            rsqrs = rsqrs[np.nonzero(rsqrs)[0]]
+            poslrs = pd.to_numeric(df['Pos Learning Rate'].values)
+            poslrs = poslrs[~np.isnan(poslrs)]
+            neglrs = pd.to_numeric(df['Neg Learning Rate'].values)
+            neglrs = neglrs[~np.isnan(neglrs)]
+            
+            fig,axs=plt.subplots(2,2,layout='constrained')
+            fig.suptitle(suptitle)
+            
+            #pos vs rsqr
+            if len(poslrs)>0:
+                ax=axs[0,0]
+                ax.scatter(poslrs,rsqrs,color='tab:green')
+                ax.plot(np.unique(poslrs), np.poly1d(np.polyfit(poslrs, rsqrs, 1))(np.unique(poslrs)),'--',color='tab:green')
+                ax.set_title('Positive LR vs R-Sqr')
+                ax.set_ylabel('R-Squared')
+                ax.set_xlabel('Pos LR')
+            
+            #neg vs rsqr
+            if len(neglrs)>0:
+                ax=axs[0,1]
+                ax.scatter(neglrs,rsqrs,color='tab:red')
+                ax.plot(np.unique(neglrs), np.poly1d(np.polyfit(neglrs, rsqrs, 1))(np.unique(neglrs)),'--',color='tab:red')
+                ax.set_title('Negative LR vs R-Sqr')
+                ax.set_ylabel('R-Squared')
+                ax.set_xlabel('Neg LR')
+            
+            #pos + neg vs rsqr
+            if len(poslrs)>0 and len(neglrs)>0:
+                ax=axs[1,0]
+                ax.scatter(poslrs + neglrs,rsqrs,color='tab:purple')
+                ax.plot(np.unique(poslrs + neglrs), np.poly1d(np.polyfit(poslrs + neglrs, rsqrs, 1))(np.unique(poslrs + neglrs)),'--',color='tab:purple')
+                ax.set_title('LR Sum vs R-Sqr')
+                ax.set_ylabel('R-Squared')
+                ax.set_xlabel('Pos LR + Neg LR')
+            
+            #pos - neg vs rsqr
+            if len(poslrs)>0 and len(neglrs)>0:
+                ax=axs[1,1]
+                ax.scatter(poslrs - neglrs,rsqrs,color='tab:orange')
+                ax.plot(np.unique(poslrs-neglrs), np.poly1d(np.polyfit(poslrs-neglrs, rsqrs, 1))(np.unique(poslrs-neglrs)),'--',color='tab:orange')
+                ax.set_title('LR Difference vs R-Sqr')
+                ax.set_ylabel('R-Squared')
+                ax.set_xlabel('Pos LR - Neg LR')
+            
+        return
+
+    @staticmethod
+    def plot_learning_rate_hist_neuron_type(learning_rate_df, neuron_type, suptitle, fig_folder):
+        
+        # areas = AREAS + ['all areas']
+        areas = AREAS
+        # cols = ['Learning Rate for Qchosen']
+    
+        for i, area in enumerate(areas):
+    
+            # area_neuron_type_df = utils.area_parser(neuron_type_df, area)
+            area_learning_rate_df = utils.area_parser(learning_rate_df, area)
+    
+            print(area)
+            if area_learning_rate_df.empty:
+                print('skipped!')
+                continue
+    
+            #get all neurons which encode specified neuron_type
+            area_type_learning_rate_df = area_learning_rate_df[area_learning_rate_df['Neuron Type'].str.contains(neuron_type)]
+
+            #all trials
+            fig,axs=plt.subplots(1,2,layout='constrained')
+            
+            for i,pos_neg in enumerate(['Pos','Neg']):
+                
+                # Get stable and volatile lrs
+                alltr_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('all trials')]
+                alltrs = pd.to_numeric(alltr_learning_rate_df[f'{pos_neg} Learning Rate'].values)
+                #hists
+                ax=axs[i]
+                ax.hist(alltrs,label=f'all trials, n={len(alltrs)}',bins=20,range=(0,1),alpha=0.5,color='tab:green')
+                #mean markers
+                y_max1 = np.max(np.histogram(alltrs,bins=20,range=(0,1))[0])
+                y_max = np.max(y_max1)
+                ax.plot(np.mean(alltrs),y_max,marker='v',color='tab:green')
+                #plot details
+                ax.set_title(f'{pos_neg} LR Hist')
+                ax.set_ylabel('Number of neurons')
+                ax.set_xlabel('Learning Rate')
+                ax.legend()
+                fig.suptitle(suptitle + f'\n{area}')
+            
+            
+            #stable vs volatile overlay
+            fig,axs=plt.subplots(1,2,layout='constrained')
+            
+            for i,pos_neg in enumerate(['Pos','Neg']):
+                
+                # Get stable and volatile lrs
+                stab_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('stable')]
+                vol_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('volatile')]
+                stabs = pd.to_numeric(stab_learning_rate_df[f'{pos_neg} Learning Rate'].values)
+                vols = pd.to_numeric(vol_learning_rate_df[f'{pos_neg} Learning Rate'].values)
+                
+                #stats
+                res = sp.stats.ttest_ind(stabs, vols, equal_var=True)
+                #hists
+                ax=axs[i]
+                ax.hist(vols,label=f'volatile, n={len(vols)}',bins=20,range=(0,1),alpha=0.5,color='tab:blue')
+                ax.hist(stabs,label=f'stable, n={len(stabs)}',bins=20,range=(0,1),alpha=0.5,color='tab:orange')
+                #mean markers
+                y_max1 = np.max(np.histogram(vols,bins=20,range=(0,1))[0])
+                y_max2 = np.max(np.histogram(stabs,bins=20,range=(0,1))[0])
+                y_max = np.max([y_max1,y_max2])
+                ax.plot(np.mean(vols),y_max,marker='v',color='tab:blue')
+                ax.plot(np.mean(stabs),y_max,marker='v',color='tab:orange')
+                #plot details
+                ax.set_title(f'{pos_neg} LR Hist\np={res.pvalue:.4f}')
+                ax.set_ylabel('Number of neurons')
+                ax.set_xlabel('Learning Rate')
+                ax.legend()
+                fig.suptitle(suptitle + f'\n{area}')
+                
+                
+                
+                
+        return  
+
+
     
     def plot_winbias_hist(self, learning_rate_df, neuron_type_df, suptitle, fig_folder):
     
@@ -4026,8 +4168,8 @@ def plot_tuning_curves_value(fr_df,behavior_df,learning_rate_df):
         binned_fr_sem = np.zeros_like(binned_value_avg)
         for j, (bot, top) in enumerate(zip(value_bins[:-1], value_bins[1:])):
             trials = np.nonzero((values>bot)&(values<top))[0]
-            binned_value_avg[j], binned_value_sem[j] = utils.get_avg_sem(values.iloc[trials])
-            binned_fr_avg[j], binned_fr_sem[j] = utils.get_avg_sem(fr_df[unit].iloc[trials])
+            binned_value_avg[j], binned_value_sem[j] = utils.get_avg_sem(values.iloc[trials],axis=0)
+            binned_fr_avg[j], binned_fr_sem[j] = utils.get_avg_sem(fr_df[unit].iloc[trials],axis=0)
         
         #plotit
         fig,ax = plt.subplots(layout="constrained")
@@ -5752,7 +5894,7 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 # Behavior_Analysis.value_dists(chosen_value_only=True)
 
 ## Choice behav
-Behavior_Analysis.choice_behav()
+# Behavior_Analysis.choice_behav()
 
 ## Subsession vs FR
 # _ = SubsessionVsFR_Analysis()
@@ -5779,7 +5921,7 @@ Behavior_Analysis.choice_behav()
 ## Get behavior exemplar plots
 # plot_behavior_new("braz20260824_03_te2584") # go to method and comment/uncomment plots you want to do
 # plot_behavior_new()
-plot_choice_vs_rewprob_vol_exemplar()
+# plot_choice_vs_rewprob_vol_exemplar()
 
 ## Dual vs Single LR
 # DvS = DualVsSingleAlpha_Analysis()
@@ -5797,7 +5939,7 @@ plot_choice_vs_rewprob_vol_exemplar()
 #regression_rsqr_table()
 
 ## Learning Rates
-# LR = LearningRate_Analysis(overwrite_flag=True,do_even_num_trials=True
+# LR = LearningRate_Analysis(overwrite_flag=True,do_even_num_trials=True)
 # # Plot LRs
 # LR = LearningRate_Analysis(overwrite_flag=False)
 # # # Subsession order control analyses
@@ -5840,7 +5982,26 @@ plot_choice_vs_rewprob_vol_exemplar()
 #    plot_dual_vs_single_alpha_rsqr()
 
 
+## Test value tuning 
+idx=0
+# learning_rate_df = utils.load_csv('LearningRates',SESSIONS[idx],DATA_FOLDER)
+# plot_tuning_curves_value(SPIKES_LIST[idx].fr_df,BEHAV_LIST[idx].behavior_df,learning_rate_df)
+
+## Test lr optimizer
+lr_df=LearningRate_Analysis.get_learning_rates_optimizer(SPIKES_LIST[idx].fr_df,BEHAV_LIST[idx],do_even_num_trials=True)
+utils.save_csv(lr_df,'LearningRates_optimizer',SESSIONS[idx],DATA_FOLDER)
+
+
+## Compare gird search to optimizer
+neuron_type = 'Qchosen'
+idx=0
+opt_df = utils.load_csv('LearningRates_optimizer',SESSIONS[idx],DATA_FOLDER)
+grid_df = utils.load_csv('LearningRates',SESSIONS[idx],DATA_FOLDER)
+LearningRate_Analysis.plot_learning_rate_hist_neuron_type(opt_df, neuron_type, 'Optimizer', '')
+LearningRate_Analysis.plot_lr_vs_rsqr(opt_df, 'Optimizer')
+LearningRate_Analysis.plot_learning_rate_hist_neuron_type(grid_df, neuron_type, 'Grid Search', '')
+LearningRate_Analysis.plot_lr_vs_rsqr(grid_df, 'Grid Search')
 
 
 # s=SPIKES_LIST[0]
-
+#%% Bottom

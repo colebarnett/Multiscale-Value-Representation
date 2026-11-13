@@ -141,8 +141,8 @@ class ChoiceBehavior_Whitehall():
         self.ind_hold_penalty_states = np.ravel(np.nonzero(self.state == b'hold_penalty'))
         self.ind_timeout_penalty_states = np.ravel(np.nonzero(self.state == b'timeout_penalty'))
         
-        self.reward_scheduleH = table.root.task[:]['reward_scheduleH'][self.state_time[self.ind_check_reward_states]]
-        self.reward_scheduleL = table.root.task[:]['reward_scheduleL'][self.state_time[self.ind_check_reward_states]]
+        self.reward_probabiltyH = table.root.task[:]['reward_probabilityH'][self.state_time[self.ind_check_reward_states]]
+        self.reward_probabilityL = table.root.task[:]['reward_probabilityL'][self.state_time[self.ind_check_reward_states]]
         
         self.fs_hdf = 60 #Hz
         
@@ -358,59 +358,7 @@ class ChoiceBehavior_Whitehall():
         
         
         
-    def GetRewardProbability(self,is_stable_block):
-        #Note: only able to do when all voltaile and all stable blocks are grouped together
-        
-        # # get info on if stable or volatile block is first
-        # from file_info import get_block_info
-        # session = self.filename[-26:-4]
-        # is_stable_block, is_volatile_block = get_block_info(session)
-        
-        
-        #stable first = 6bl*100tr + 48bl*20tr
-        #vol first = 24bl*20tr + 12bl*100tr
-        
-        def round_to_base(number, base): #to catch rounding errors and round to closest multiple of 0.2
-            return base * round(number / base)
-        
-        rew_probs = np.zeros(self.num_successful_trials)
-        if is_stable_block[0] == 1: #stable block first
-            n_block_1 = 6
-            n_trials_1 = 100
-            n_block_2 = 48
-            n_trials_2 = 20
-            
-        else: #volatile block first
-            n_block_1 = 24
-            n_trials_1 = 20
-            n_block_2 = 12
-            n_trials_2 = 100
-        
-            
-        transition_pt = n_block_1 * n_trials_1
-        block_edges = np.concat([np.arange(0,(n_block_1+1)*n_trials_1,step=n_trials_1), 
-                                 np.arange(transition_pt+n_trials_2,transition_pt+(n_block_2+1)*n_trials_2,step=n_trials_2)])
 
-        
-        for i in range(len(block_edges)-1):
-            edge_1 = block_edges[i] #get edges of current block
-            edge_2 = block_edges[i+1]
-            
-            if edge_1 > self.num_successful_trials: #skip if we are past the num of trials
-                continue
-            
-            if edge_2 > self.num_successful_trials: #dont make upper edge past num of trials
-                edge_2 = self.num_successful_trials
-            
-            rew_prob = round_to_base(np.mean(self.reward_scheduleH[edge_1:edge_2]),0.2) #avg rew sched to get empirical rew prob
-            rew_probs[edge_1:edge_2] = np.full(edge_2-edge_1,rew_prob) #fill into var which gets saved out
-        
-        rew_probs_H = rew_probs
-        rew_probs_L = 1 - rew_probs_H
-        
-        assert ~np.any(np.isnan(rew_probs_H)), f'NAN FOUND WHILE FINDING BLOCK REW PROBS {self.filename}'
-            
-        return rew_probs_H, rew_probs_L
         
 
 

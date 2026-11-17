@@ -129,38 +129,38 @@ SESSIONS = [
             "braz20260728_03_te2536",
             "braz20260729_03_te2539",
             "braz20260730_03_te2542",
-            # "braz20260731_03_te2545",
-            # "braz20260803_03_te2548",
-            # "braz20260804_03_te2551",
-            # "braz20260805_03_te2554",
-            # "braz20260806_03_te2557",
-            # "braz20260810_03_te2560",
-            # # "braz20260811_03_te2563", #too few trials (1044), excluded
-            # # "braz20260812_03_te2566", #too few trials (939), excluded
-            # "braz20260813_03_te2569", 
-            # "braz20260814_03_te2572", 
-            # "braz20260817_03_te2575", 
-            # "braz20260818_03_te2578", 
-            # "braz20260821_03_te2581", 
-            # "braz20260824_03_te2584", 
-            # "braz20260827_03_te2587",
-            # # "braz20260828_03_te2590", #too few trials (1039), excluded
-            # "braz20260901_03_te2593",
-            # "braz20260902_03_te2596",
-            # "braz20260908_03_te2599",
-            # "braz20260909_03_te2602",
-            # "braz20260910_03_te2605",
-            # "braz20260911_03_te2608",
-            # "braz20260915_05_te2613",
-            # "braz20260916_03_te2616",
-            # "braz20260918_03_te2619",
-            # "braz20260924_03_te2622",
-            # "braz20260925_03_te2625",
-            # "braz20261001_03_te2628",
-            # # # # "braz20261002_05_te2633", #too few trials (747), excluded
-            # "braz20261007_03_te2636",
-            # # # "braz20261008_03_te2639", #too few trials (845), excluded
-            # # # "braz20261009_03_te2642", #too few trials (1041), excluded
+            "braz20260731_03_te2545",
+            "braz20260803_03_te2548",
+            "braz20260804_03_te2551",
+            "braz20260805_03_te2554",
+            "braz20260806_03_te2557",
+            "braz20260810_03_te2560",
+            # "braz20260811_03_te2563", #too few trials (1044), excluded
+            # "braz20260812_03_te2566", #too few trials (939), excluded
+            "braz20260813_03_te2569", 
+            "braz20260814_03_te2572", 
+            "braz20260817_03_te2575", 
+            "braz20260818_03_te2578", 
+            "braz20260821_03_te2581", 
+            "braz20260824_03_te2584", 
+            "braz20260827_03_te2587",
+            # "braz20260828_03_te2590", #too few trials (1039), excluded
+            "braz20260901_03_te2593",
+            "braz20260902_03_te2596",
+            "braz20260908_03_te2599",
+            "braz20260909_03_te2602",
+            "braz20260910_03_te2605",
+            "braz20260911_03_te2608",
+            "braz20260915_05_te2613",
+            "braz20260916_03_te2616",
+            "braz20260918_03_te2619",
+            "braz20260924_03_te2622",
+            "braz20260925_03_te2625",
+            "braz20261001_03_te2628",
+            # # # "braz20261002_05_te2633", #too few trials (747), excluded
+            "braz20261007_03_te2636",
+            # # "braz20261008_03_te2639", #too few trials (845), excluded
+            # # "braz20261009_03_te2642", #too few trials (1041), excluded
             ]
 
 QCHOSEN_REGRESSORS = [
@@ -835,7 +835,7 @@ class ProcessBehavior:
             is_stable_block, is_volatile_block = is_stable_block[:len(choices)], is_volatile_block[:len(choices)] #trim to actual num of trials
 
         # Actual reward probability of each target throughout task
-        rew_probs_2, rew_probs_1 = behavior.reward_probabiltyH, behavior.reward_probabiltyL
+        rew_probs_2, rew_probs_1 = behavior.reward_probabilityH, behavior.reward_probabilityL
         
         # Get which side (left or right) each choice was
         choice_side_raw = behavior.GetTargetSideSelection()
@@ -985,6 +985,26 @@ class ProcessBehavior:
             
 
         return
+    
+    def get_learning_rate_grid_behavior(self,learning_rate_grid):
+        
+        dict_out = {'dict layout':'(pos alpha,neg alpha) : behavior_df',
+                    'learning rate grid':learning_rate_grid,
+                    'data': dict() }
+        
+        for pos_alpha in learning_rate_grid:
+            for neg_alpha in learning_rate_grid:
+                
+                # get beahvior according to current learning rates
+                self.get_behavior(Q_learning=True, learning_rates=[pos_alpha,neg_alpha])
+                
+                dict_out['data'][(np.round(pos_alpha,2),np.round(neg_alpha,2))] = self.behavior_df
+                
+                
+        utils.save_pkl(dict_out,'LR_Grid_behavior_dfs_dict',self.session,DATA_FOLDER)
+                
+        return 
+    
         
 class BehaviorPlots:
     def __init__(self, session: str, subsession: str):
@@ -1448,9 +1468,9 @@ class BehaviorPlots:
         return fig
       
 
-class LearningRate_Analysis:
+class Process_LearningRates:
     
-    def __init__(self,overwrite_flag=False,do_stable_first_only=False,do_volatile_first_only=False,do_even_num_trials=True):
+    def __init__(self,do_even_num_trials=True):
         
         self.fig_folder = 'LearningRates'
         
@@ -1461,72 +1481,42 @@ class LearningRate_Analysis:
         for s,session in enumerate(SESSIONS):
             
             start = time.time()
-            
-            #to test stab->vol vs vol->stab
-            is_stable_block, is_volatile_block = get_block_info(session)
-            if do_volatile_first_only:
-                if is_stable_block[0]==1 and is_volatile_block[0]==0:
-                    continue #skip stab first
-            if do_stable_first_only:
-                if is_stable_block[0]==0 and is_volatile_block[0]==1:
-                    continue #skip vol first
-            
-            
-            # #Get encodings
-            # try:
-            #     neuron_type_df = utils.load_csv('NeuronTypes',session,DATA_FOLDER)
-            # except:
-            #     print('Need to run neuron typing first!')
-            #     return
+
+            try:
+                lr_grid_behav_dict = utils.load_pkl('LR_Grid_behavior_dfs_dict',session,DATA_FOLDER)
+            except:
+                print('Need to run get_learning_rate_grid_behavior first!')
+                return
             
             # Get learning rate for each unit
-            if not overwrite_flag and utils.does_csv_exist('LearningRates',session,DATA_FOLDER): #don't overwrite, load
-                learning_rate_df = utils.load_csv('LearningRates',session,DATA_FOLDER)
-            else: #don't load, compute
-                Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-                learning_rate_df = self.get_learning_rates(Spikes.fr_df,Behav,self.do_even_num_trials)
-                utils.save_csv(learning_rate_df,'LearningRates',session,DATA_FOLDER)
-                print('*'*50)
-                print('*'*50)
-                utils.get_time_left(start,s,len(SESSIONS))
-                print('*'*50)
-                print('*'*50)
+            Spikes, Behav, _ = get_Spikes_Behav_LFP(s,session)
+            learning_rate_df,learning_rate_df_grid = self.get_learning_rates(Spikes.fr_df,Behav,lr_grid_behav_dict,self.do_even_num_trials)
+            utils.save_csv(learning_rate_df,'LearningRates',session,DATA_FOLDER)
+            utils.save_csv(learning_rate_df_grid,'LearningRatesGridSearch',session,DATA_FOLDER)
+            print('*'*50)
+            print('*'*50)
+            utils.get_time_left(start,s,len(SESSIONS))
+            print('*'*50)
+            print('*'*50)
                 
             self.lr_dfs.append(learning_rate_df)
-            # self.nt_dfs.append(neuron_type_df)
        
         self.allsess_lr_df = utils.merge_sessions_df(self.lr_dfs)
-        # self.allsess_nt_df = utils.merge_sessions_df(self.nt_dfs)
         utils.save_csv(self.allsess_lr_df,'LearningRates','',DATA_FOLDER)
-        # utils.save_csv(self.allsess_nt_df,'NeuronTypes','',DATA_FOLDER)
-        
-        if do_stable_first_only:
-            suptitle = 'Stable to Volatile Sessions'
-        elif do_volatile_first_only:
-            suptitle = 'Volatile to Stable Sessions'
-        elif do_even_num_trials:
-            suptitle = 'All Sessions, even num_trials for stable and volatile'
-        else:
-            suptitle = 'All Sessions'
-            
-        # Plot
-        # self.plot_learning_rate_dual_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        # self.plot_learning_rate_dual_hists_new(self.allsess_lr_df,suptitle,self.fig_folder)
-        # self.plot_learning_rate_single_hists_new(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        # self.plot_winbias_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        # self.plot_learning_rate_scatter_1(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        # self.plot_learning_rate_scatter_2(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        # self.plot_learning_rate_scatter_all_combined(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        # self.plot_winbias_hist(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
-        
-        # self.plot_learning_rate_hist_neuron_type(self.allsess_lr_df,'Qchosen','Qchosen - all sess',self.fig_folder)
-        # self.plot_learning_rate_hist_neuron_type(self.allsess_lr_df,'Q1','Q1 - all sess',self.fig_folder)
-        # self.plot_learning_rate_hist_neuron_type(self.allsess_lr_df,'Q2','Q2 - all sess',self.fig_folder)
-        
-        self.plot_lr_vs_rsqr(self.allsess_lr_df)
         
         return 
-        
+    
+    @staticmethod
+    def get_learning_rate_grid_behavior():
+        for s,session in enumerate(SESSIONS):
+            
+            start = time.time()
+            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+            Behav.get_learning_rate_grid_behavior(LEARNING_RATES)
+            utils.get_time_left(start,s,len(SESSIONS))
+            
+        return
+    
     @staticmethod   
     def get_rsqrs(do_even_num_trials):
 
@@ -1562,127 +1552,17 @@ class LearningRate_Analysis:
         ax.set_title('R-Squareds of neurons with fitted learning rates')
         
         return
-        
-    
-    
 
     @staticmethod    
-    def get_learning_rates_optimizer(fr_df,Behavior,do_even_num_trials):
-
-        
-        def lr_reg(lrs,Behavior,fr,trials,value_type):    
-            
-            Behavior.get_behavior(Q_learning=True, learning_rates=lrs)
-            regressor_matrix = Behavior.behavior_df[REGRESSOR_SUPERSET_DICT[value_type]].iloc[trials]
-            res = utils.linear_encoding_regression(fr, regressor_matrix)
-            
-            return res
-
-        def lr_reg_is_signif(lrs,Behavior,fr,trials,value_type):
-            
-            res = lr_reg(lrs,Behavior,fr,trials,value_type)
-            
-            is_signif = (res.f_pvalue < ALPHA_THRESHOLD) and (res.pvalues[value_type] < ALPHA_THRESHOLD)
-            
-            return is_signif
-
-        print(f'{len(fr_df.columns)} neurons')
-        
-        df_rows_learning_rates = [] #to save out info in a df
-        for stable_or_volatile in SUBSESSIONS:        
-        
-            assert len(Behavior.behavior_df) == len(fr_df), 'Number of trials do not match!'
-            
-            if do_even_num_trials:
-                trials = utils.get_trials_even_num(Behavior.behavior_df,stable_or_volatile)
-            else:
-                trials = utils.get_trials(Behavior.behavior_df,stable_or_volatile)
-        
-            if not len(trials) > 1: #if no trials for current subsession
-                print(f'No trials for {stable_or_volatile}. Skipping!')    
-                continue
-            else:
-                print(stable_or_volatile)
-        
-            # Get FR for each neuron
-            units = fr_df.columns
-            for i,unit in enumerate(units):
-                
-                start = time.time()
-                
-                fr = fr_df[unit].iloc[trials] #vector of FRs for subsession trial
-                
-                
-                
-                # def nll_fast(lrs,Behavior,fr,trials,value_type):
-                #     y=fr
-                #     Behavior.get_behavior(Q_learning=True, learning_rates=lrs)
-                #     X = Behavior.behavior_df[REGRESSOR_SUPERSET_DICT[value_type]].to_numpy()[trials]
-                #     X = np.column_stack([np.ones(len(X)), X])   # only if linear_encoding_regression adds a constant
-                #     beta, *_ = np.linalg.lstsq(X, y, rcond=None)
-                #     rss = np.sum((y - X @ beta) ** 2)
-                #     n = len(y)
-                #     return 0.5 * n * (np.log(2 * np.pi) + np.log(rss / n) + 1)   # identical to -statsmodels .llf
-
-                ## For each regressor set, get best LRs based on log likelihood
-                nll_out_dict={}
-                lr_out_dict={}
-                for value_type,regressors in REGRESSOR_SUPERSET_DICT.items():
-                    nll = lambda *args: -1*lr_reg(*args).llf
-                    # nll = lambda *args: nll_fast(*args)
-                    x0 = [0.5, 0.5]  # [pos_alpha, neg_alpha]
-                    result_A = sp.optimize.minimize(nll, x0, 
-                    		   args=(Behavior,fr,trials,value_type),
-                    		   bounds=[(0.01,1), (0.01,1)],
-                    		   method='L-BFGS-B',
-                               tol=1e-3)
-                    pos_alpha, neg_alpha = result_A["x"]
-                    lr_out_dict[value_type] = [pos_alpha,neg_alpha]
-                    nll_out_dict[value_type] = -1*lr_reg(lr_out_dict[value_type],Behavior,fr,trials,value_type).llf
-                    
-                    
-                ## Find best regressor set based on log likelihood
-                best_ll_valuetype = min(nll_out_dict, key=nll_out_dict.get) #get which set of regressors had highest likelihood (min neg ll)
-                best_value_type_lrs = lr_out_dict[best_ll_valuetype] #get lrs of that set of regressors
-
-                #if best regressor set is signif and if value reg is signif, then mark as encoding. If not, mark as non-encoding
-                is_signif = lr_reg_is_signif(best_value_type_lrs,Behavior,fr,trials,best_ll_valuetype)
-                if is_signif:
-                    neuron_type = best_ll_valuetype
-                    best_learning_rates = best_value_type_lrs
-                    best_rsqr = lr_reg(best_learning_rates,Behavior,fr,trials,neuron_type).rsquared
-                if not is_signif:
-                    neuron_type = 'none'
-                    best_learning_rates = ['none','none']
-                    best_rsqr = 'none'
-
-                #save out info for unit
-                lr_row_dict = {'Unit':f'{unit} - {stable_or_volatile}',
-                               'Neuron Type': neuron_type,
-                               'Pos Learning Rate': best_learning_rates[0],
-                               'Neg Learning Rate': best_learning_rates[1],
-                               'R-Squared': best_rsqr}
-                df_rows_learning_rates.append(lr_row_dict)
-                
-                print(lr_row_dict)
-                    
-                utils.get_time_left(start,i,len(units))
-                                
-        learning_rate_df = pd.DataFrame(df_rows_learning_rates) #rows: units x subsessions, cols: lrs for each reg
-        # utils.save_csv(learning_rate_df,'LR',"debug",DATA_FOLDER)
-
-        return learning_rate_df
-    
-    
-    @staticmethod    
-    def get_learning_rates(fr_df,Behavior,do_even_num_trials):
+    def get_learning_rates(fr_df,Behavior,lr_grid_behav_dict,do_even_num_trials):
     
         print(f'{len(fr_df.columns)} neurons')
         
-        df_rows_learning_rates = [] #to save out info in a df
-        for stable_or_volatile in SUBSESSIONS:        
+        learning_rate_grid = lr_grid_behav_dict['learning rate grid']
         
-            assert len(Behavior.behavior_df) == len(fr_df), 'Number of trials do not match!'
+        df_rows_learning_rates = [] #to save out info in a df
+        df_rows_learning_rates_grid = []
+        for stable_or_volatile in SUBSESSIONS:        
             
             if do_even_num_trials:
                 trials = utils.get_trials_even_num(Behavior.behavior_df,stable_or_volatile)
@@ -1708,20 +1588,22 @@ class LearningRate_Analysis:
                 best_rsqr = 0.
                 best_learning_rates = ['None','None']
                 neuron_type = 'None'
+
                 
+                assert 'Dual' in VALUE_MODEL #dual LR
                 
-                if 'Dual' not in VALUE_MODEL: #single LR
-                    for alpha in LEARNING_RATES:
-    
-                        # get beahvior according to current learning rates
-                        Behavior.get_behavior(Q_learning=True, learning_rates=[alpha])
+                ##Grid search
+                for pos_alpha in learning_rate_grid:
+                    for neg_alpha in learning_rate_grid:
+                        
+                        pos_alpha, neg_alpha = np.round([pos_alpha,neg_alpha],decimals=2) # to help with floating point errors
+                        behavior_df = lr_grid_behav_dict['data'][(pos_alpha, neg_alpha)]
                         
                         # get set of regressors 
                         for value_type,regressors in REGRESSOR_SUPERSET_DICT.items():
-                            regressor_matrix = Behavior.behavior_df[regressors].iloc[trials]
-        
+                                    
                             # regress fr against the behavior calculated for this learning rate and set of regressors
-                            res = utils.linear_encoding_regression(fr, regressor_matrix)
+                            res = utils.linear_encoding_regression(fr,behavior_df[regressors].iloc[trials])
                             
                             # only consider if regression and value regressor are both significant
                             if res.f_pvalue < ALPHA_THRESHOLD and res.pvalues[value_type] < ALPHA_THRESHOLD:
@@ -1729,54 +1611,95 @@ class LearningRate_Analysis:
                                 # take lr and value type if it yields the best rsqr so far, otherwise continue on
                                 if res.rsquared > best_rsqr:
                                     best_rsqr = res.rsquared
-                                    best_learning_rates[0] = alpha
+                                    best_learning_rates = [pos_alpha,neg_alpha]
                                     neuron_type = value_type
                                     
-                    #save out info for unit
-                    lr_row_dict = {'Unit':f'{unit} - {stable_or_volatile}',
-                                   'Neuron Type': neuron_type,
-                                   'Learning Rate': best_learning_rates[0],
-                                   'R-Squared': best_rsqr}
-                    df_rows_learning_rates.append(lr_row_dict)
-                
-                if 'Dual' in VALUE_MODEL: #dual LR
-                    for pos_alpha in LEARNING_RATES:
-                        for neg_alpha in LEARNING_RATES:
-                        
-                            # get beahvior according to current learning rates
-                            Behavior.get_behavior(Q_learning=True, learning_rates=[pos_alpha,neg_alpha])
-                            
-                            # get set of regressors 
-                            for value_type,regressors in REGRESSOR_SUPERSET_DICT.items():
-                                regressor_matrix = Behavior.behavior_df[regressors].iloc[trials]
-            
-                                # regress fr against the behavior calculated for this learning rate and set of regressors
-                                res = utils.linear_encoding_regression(fr, regressor_matrix)
-                                
-                                # only consider if regression and value regressor are both significant
-                                if res.f_pvalue < ALPHA_THRESHOLD and res.pvalues[value_type] < ALPHA_THRESHOLD:
                                     
-                                    # take lr and value type if it yields the best rsqr so far, otherwise continue on
-                                    if res.rsquared > best_rsqr:
-                                        best_rsqr = res.rsquared
-                                        best_learning_rates = [pos_alpha,neg_alpha]
-                                        neuron_type = value_type
-                                        
-                    #save out info for unit
-                    lr_row_dict = {'Unit':f'{unit} - {stable_or_volatile}',
-                                   'Neuron Type': neuron_type,
-                                   'Pos Learning Rate': best_learning_rates[0],
-                                   'Neg Learning Rate': best_learning_rates[1],
-                                   'R-Squared': best_rsqr}
-                    df_rows_learning_rates.append(lr_row_dict)
+                #save out info for unit
+                lr_row_dict_1 = {'Unit':f'{unit} - {stable_or_volatile}',
+                               'Neuron Type': neuron_type,
+                               'Pos Learning Rate': best_learning_rates[0],
+                               'Neg Learning Rate': best_learning_rates[1],
+                               'R-Squared': best_rsqr}
+                df_rows_learning_rates_grid.append(lr_row_dict_1)
+                
+                ## Refine grid search using optimizer
+                if neuron_type != 'None':
+                    nll = lambda *args: -1*utils.lr_reg(*args).llf
+                    x0 = best_learning_rates  # [pos_alpha, neg_alpha]
+                    result_A = sp.optimize.minimize(nll, x0, 
+                    		   args=(Behavior,fr,trials,REGRESSOR_SUPERSET_DICT[neuron_type]),
+                    		   bounds=[(0.01,1), (0.01,1)],
+                    		   method='Nelder-Mead',
+                               tol=1e-3)
+                    best_learning_rates = result_A["x"]
+                
+                #save out info for unit
+                lr_row_dict = {'Unit':f'{unit} - {stable_or_volatile}',
+                               'Neuron Type': neuron_type,
+                               'Pos Learning Rate': best_learning_rates[0],
+                               'Neg Learning Rate': best_learning_rates[1],
+                               'R-Squared': utils.lr_reg(best_learning_rates,Behavior,fr,trials,REGRESSOR_SUPERSET_DICT[neuron_type]).rsquared}
+                df_rows_learning_rates.append(lr_row_dict)
                     
                 utils.get_time_left(start,i,len(units))
                                 
         learning_rate_df = pd.DataFrame(df_rows_learning_rates) #rows: units x subsessions, cols: lrs for each reg
+        learning_rate_df_grid = pd.DataFrame(df_rows_learning_rates_grid) #rows: units x subsessions, cols: lrs for each reg
         # utils.save_csv(learning_rate_df,'LR',"debug",DATA_FOLDER)
 
-        return learning_rate_df
+        return learning_rate_df, learning_rate_df_grid
 
+
+class LearningRate_Analysis:
+    
+    def __init__(self,do_stable_first_only=False,do_volatile_first_only=False):
+        
+        self.fig_folder = 'LearningRates'
+       
+        self.lr_dfs = []
+        for s,session in enumerate(SESSIONS):
+            
+            #to test stab->vol vs vol->stab
+            is_stable_block, is_volatile_block = get_block_info(session)
+            if do_volatile_first_only:
+                if is_stable_block[0]==1 and is_volatile_block[0]==0:
+                    continue #skip stab first
+            if do_stable_first_only:
+                if is_stable_block[0]==0 and is_volatile_block[0]==1:
+                    continue #skip vol first
+            
+            # Load learning rate for each sess
+            learning_rate_df = utils.load_csv('LearningRates',session,DATA_FOLDER)
+            # learning_rate_df = utils.load_csv('LearningRatesGridSearch',session,DATA_FOLDER)
+            self.lr_dfs.append(learning_rate_df)
+       
+        self.allsess_lr_df = utils.merge_sessions_df(self.lr_dfs)
+        
+        if do_stable_first_only:
+            suptitle = 'Stable to Volatile Sessions'
+        elif do_volatile_first_only:
+            suptitle = 'Volatile to Stable Sessions'
+        else:
+            suptitle = 'All Sessions'
+            
+        # Plot
+        # self.plot_learning_rate_dual_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_dual_hists_new(self.allsess_lr_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_single_hists_new(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_winbias_violins(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_scatter_1(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_scatter_2(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_learning_rate_scatter_all_combined(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        # self.plot_winbias_hist(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
+        
+        # self.plot_learning_rate_hist_neuron_type(self.allsess_lr_df,'Qchosen','Qchosen - all sess',self.fig_folder)
+        # self.plot_learning_rate_hist_neuron_type(self.allsess_lr_df,'Q1','Q1 - all sess',self.fig_folder)
+        # self.plot_learning_rate_hist_neuron_type(self.allsess_lr_df,'Q2','Q2 - all sess',self.fig_folder)
+        
+        self.plot_lr_vs_rsqr(self.allsess_lr_df)
+        return
+    
     def _strip_sign_prefix(self,col):
         for prefix in ('Pos ', 'Neg '):
             if col.startswith(prefix):
@@ -2838,7 +2761,7 @@ class LearningRate_Analysis:
         
             # area_neuron_type_df = utils.area_parser(neuron_type_df, area)
             df = utils.area_parser(learning_rate_df, area)
-            df = df[df['Neuron Type'].str.contains('Q')
+            df = df[df['Neuron Type']].str.contains('Q')
             
             rsqrs = pd.to_numeric(df['R-Squared'].values)
             rsqrs = rsqrs[~np.isnan(rsqrs)]
@@ -5890,6 +5813,9 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 
 # plot_behavior()
 
+## Get Behavior for Grid of Learning Rates
+# Process_LearningRates.get_learning_rate_grid_behavior()
+
 ## Value distributions
 # Behavior_Analysis.value_dists(chosen_value_only=True)
 
@@ -5939,7 +5865,7 @@ SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(overwrite_spikes_flag=False,overwrit
 #regression_rsqr_table()
 
 ## Learning Rates
-# LR = LearningRate_Analysis(overwrite_flag=True,do_even_num_trials=True)
+LR = Process_LearningRates(do_even_num_trials=True)
 # # Plot LRs
 # LR = LearningRate_Analysis(overwrite_flag=False)
 # # # Subsession order control analyses
@@ -5988,19 +5914,19 @@ idx=0
 # plot_tuning_curves_value(SPIKES_LIST[idx].fr_df,BEHAV_LIST[idx].behavior_df,learning_rate_df)
 
 ## Test lr optimizer
-lr_df=LearningRate_Analysis.get_learning_rates_optimizer(SPIKES_LIST[idx].fr_df,BEHAV_LIST[idx],do_even_num_trials=True)
-utils.save_csv(lr_df,'LearningRates_optimizer',SESSIONS[idx],DATA_FOLDER)
+# lr_df=LearningRate_Analysis.get_learning_rates_optimizer(SPIKES_LIST[idx].fr_df,BEHAV_LIST[idx],do_even_num_trials=True)
+# utils.save_csv(lr_df,'LearningRates_optimizer',SESSIONS[idx],DATA_FOLDER)
 
 
 ## Compare gird search to optimizer
-neuron_type = 'Qchosen'
-idx=0
-opt_df = utils.load_csv('LearningRates_optimizer',SESSIONS[idx],DATA_FOLDER)
-grid_df = utils.load_csv('LearningRates',SESSIONS[idx],DATA_FOLDER)
-LearningRate_Analysis.plot_learning_rate_hist_neuron_type(opt_df, neuron_type, 'Optimizer', '')
-LearningRate_Analysis.plot_lr_vs_rsqr(opt_df, 'Optimizer')
-LearningRate_Analysis.plot_learning_rate_hist_neuron_type(grid_df, neuron_type, 'Grid Search', '')
-LearningRate_Analysis.plot_lr_vs_rsqr(grid_df, 'Grid Search')
+# neuron_type = 'Qchosen'
+# idx=0
+# opt_df = utils.load_csv('LearningRates_optimizer',SESSIONS[idx],DATA_FOLDER)
+# grid_df = utils.load_csv('LearningRates',SESSIONS[idx],DATA_FOLDER)
+# LearningRate_Analysis.plot_learning_rate_hist_neuron_type(opt_df, neuron_type, 'Optimizer', '')
+# LearningRate_Analysis.plot_lr_vs_rsqr(opt_df, 'Optimizer')
+# LearningRate_Analysis.plot_learning_rate_hist_neuron_type(grid_df, neuron_type, 'Grid Search', '')
+# LearningRate_Analysis.plot_lr_vs_rsqr(grid_df, 'Grid Search')
 
 
 # s=SPIKES_LIST[0]

@@ -306,6 +306,14 @@ def linear_encoding_regression(spikes,behavior):
     # rsqr = res.rsquared
     return res #f_pval, pvals, rsqr
 
+def lr_reg(learning_rates,Behavior,fr,trials,regressors):    
+        
+    Behavior.get_behavior(Q_learning=True,learning_rates=learning_rates)
+    regressor_matrix = Behavior.behavior_df[regressors].iloc[trials]
+    res = linear_encoding_regression(fr, regressor_matrix)
+    
+    return res
+
 def residualize(reg1,reg2):
     res = linear_encoding_regression(reg1,reg2)
     return res.resid #reg1 that cannot be expained by reg2 (is orthogonal to reg2)

@@ -9,6 +9,13 @@ import os
 import numpy as np
 #### Define Global Constants
 
+OVERWRITE_SPIKES=False
+OVERWRITE_LFP=False
+LOAD_BEHAV=True
+LOAD_SPIKES=False
+LOAD_LFP=False
+VERBOSE=False
+
 SUBSESSIONS = ['all trials','stable block','volatile block']
 
 SESSIONS = [
@@ -166,6 +173,10 @@ T_BOXCAR_SIZE = 0.1
 T_BOXCAR_STEP = 0.05
 T_VECTOR = np.round(np.arange(-T_BEFORE, T_AFTER-T_BOXCAR_STEP, T_BOXCAR_STEP),decimals=2)
 N_TIMEBINS = len(T_VECTOR)
+
+#NOW DEFINED IN LR ANALYSIS SCRIPT
+# ENCODING_ALPHA = 0.005 #significance threshold for each timebin
+# ENCODING_NCONSEC = 3 #num of consecutive significant time bins needed to be determined as encoding
 
 # #From old psth way of doing things
 # T_BEFORE = 0.1 #how far to look before alignment point [s]

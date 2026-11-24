@@ -19,18 +19,19 @@ import numpy as np
 import scipy as sp
 import pandas as pd
 # import matplotlib_venn
-import statsmodels.api as sm
-import statsmodels.formula.api as sm_api
-import matplotlib.lines as mlines
+# import statsmodels.api as sm
+# import statsmodels.formula.api as sm_api
+# import matplotlib.lines as mlines
 from matplotlib import pyplot as plt
-import matplotlib.patches as mpatches
+# import matplotlib.patches as mpatches
 # from matplotlib.colors import BoundaryNorm
 # from numpy.polynomial.polynomial import polyfit
 
 import Whitehall_utils as utils
 from file_info import get_block_info, get_area_info
-import DecisionMakingBehavior_Whitehall as BehaviorAnalysis
-from Whitehall_Processing import ProcessSpikes,ProcessBehavior,load_data
+# import DecisionMakingBehavior_Whitehall as BehaviorAnalysis
+from Whitehall_Processing import (ProcessSpikes,ProcessBehavior,get_Spikes_Behav_LFP,
+SPIKES_LIST,BEHAV_LIST,LFP_LIST) #data is loaded here
 from Whitehall_Globals import (SUBSESSIONS,SESSIONS,
 PROJ_FOLDER,BMI_FOLDER,DATA_FOLDER,NS_FOLDER,NSX_FOLDER,
 REGRESSOR_SUPERSET_DICT,ALL_REGRESSORS,FREQ_BANDS,AREAS,REW_PROBS,
@@ -39,37 +40,22 @@ T_BEFORE,T_AFTER,T_BOXCAR_SIZE,T_BOXCAR_STEP,T_VECTOR,N_TIMEBINS,MIN_FR_THRESH,M
 LEARNING_RATES,ALPHA_THRESHOLD,
 COLORS,LINESTYLES,MARKERSTYLES,HATCHSTYLES)
 
-#%% Load Data
 os.chdir(PROJ_FOLDER)
-SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(
-                                            overwrite_spikes_flag=True,
-                                            overwrite_lfp_flag=False,
-                                            load_behav=True,
-                                            load_spikes=True,
-                                            load_flp=False,
-                                            verbose=False
-                                            )
-def get_Spikes_Behav_LFP(s: int, session: str):
-    # s is idx counter representing the number session to load
-    # session is the str name of the session to load: e.g. "braz20260728_03_te2536""
-    assert SESSIONS[s] == session
-    Spikes = SPIKES_LIST[s]
-    Behav = BEHAV_LIST[s]
-    LFP = LFP_LIST[s]
-    return Spikes, Behav, LFP
 
 #%% Main
 
 class Process_LearningRates:
     
-    def __init__(self,do_even_num_trials=True):
-        
-        self.fig_folder = 'LearningRates'
-        
-        self.do_even_num_trials=do_even_num_trials
+    def __init__(self,
+                    value_model='DualBaselineSide',
+                    do_even_num_trials=True,
+                    normalize_within_trials=False,
+                    normalize_across_trials=True,
+                    encoding_alpha_thresh=0.005, #significance threshold for each timebin
+                    n_consec=3, #num of consecutive significant time bins needed to be determined as encoding):     
+                    file_save_name='LearningRates'):
        
         self.lr_dfs = []
-        self.nt_dfs = []
         for s,session in enumerate(SESSIONS):
             
             start = time.time()
@@ -82,19 +68,24 @@ class Process_LearningRates:
             
             # Get learning rate for each unit
             Spikes, Behav, _ = get_Spikes_Behav_LFP(s,session)
-            learning_rate_df,learning_rate_df_grid = self.get_learning_rates(Spikes.fr_df,Behav,lr_grid_behav_dict,self.do_even_num_trials)
-            utils.save_csv(learning_rate_df,'LearningRates',session,DATA_FOLDER)
-            utils.save_csv(learning_rate_df_grid,'LearningRatesGridSearch',session,DATA_FOLDER)
-            print('*'*50)
-            print('*'*50)
-            utils.get_time_left(start,s,len(SESSIONS))
-            print('*'*50)
-            print('*'*50)
+            
+            learning_rate_df = self.get_learning_rates(Spikes.psth_dict,Behav,lr_grid_behav_dict,
+                                   value_model='DualBaselineSide',
+                                   do_even_num_trials=True,
+                                   normalize_within_trials=False,
+                                   normalize_across_trials=True,
+                                   encoding_alpha_thresh=0.005, #significance threshold for each timebin
+                                   n_consec=3, #num of consecutive significant time bins needed to be determined as encoding):     
+                                   )
+                
+            utils.save_csv(learning_rate_df,file_save_name,session,DATA_FOLDER)
+
+            utils.get_time_left_big(start,s,len(SESSIONS))
                 
             self.lr_dfs.append(learning_rate_df)
        
         self.allsess_lr_df = utils.merge_sessions_df(self.lr_dfs)
-        utils.save_csv(self.allsess_lr_df,'LearningRates','',DATA_FOLDER)
+        utils.save_csv(self.allsess_lr_df,file_save_name,'',DATA_FOLDER)
         
         return 
     
@@ -104,55 +95,66 @@ class Process_LearningRates:
             
             start = time.time()
             Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-            Behav.get_learning_rate_grid_behavior(LEARNING_RATES)
+            Behav.get_learning_rate_grid_behavior()
             utils.get_time_left(start,s,len(SESSIONS))
             
-        return
-    
-    @staticmethod   
-    def get_rsqrs(do_even_num_trials):
-
-        rsqrs_dict = {stable_or_volatile: [] for stable_or_volatile in SUBSESSIONS}
-        for s,session in enumerate(SESSIONS):
-            
-            start = time.time()
-            
-            print(session)
-            
-            
-            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-            neuron_type_df = utils.load_csv('NeuronTypes',session,DATA_FOLDER)
-            learning_rate_df = utils.load_csv('LearningRatesSingle',session,DATA_FOLDER)
-            
-            for stable_or_volatile in SUBSESSIONS:
-            
-                rsqrs_sess = utils.get_rsqrs_from_LRs(stable_or_volatile, Spikes.fr_df, Behav, neuron_type_df, learning_rate_df, do_even_num_trials, REGRESSORS)
-                rsqrs_dict[stable_or_volatile] = rsqrs_dict[stable_or_volatile] + rsqrs_sess
-            
-            utils.get_time_left(start,s,len(SESSIONS)) 
-        
-        #get avgs and sem
-        avgs,sems=[],[]
-        for stable_or_volatile in SUBSESSIONS:
-            avg,sem = utils.get_avg_sem(rsqrs_dict[stable_or_volatile],axis=0)
-            avgs.append(avg)
-            sems.append(sem)
-            
-        fig,ax=plt.subplots(layout='constrained')
-        ax.bar(SUBSESSIONS,avgs,yerr=sems)
-        ax.set_ylabel('R-Squared')
-        ax.set_title('R-Squareds of neurons with fitted learning rates')
-        
         return
 
 
     @staticmethod    
-    def get_learning_rates(psth_dict,Behavior,lr_grid_behav_dict,do_even_num_trials):
+    def get_learning_rates(psth_dict,Behavior,lr_grid_behav_dict,
+                           value_model='DualBaselineSide',
+                           do_even_num_trials=True,
+                           normalize_within_trials=False,
+                           normalize_across_trials=True,
+                           encoding_alpha_thresh=0.005, #significance threshold for each timebin
+                           n_consec=3, #num of consecutive significant time bins needed to be determined as encoding):     
+                           ):
+        
+        ## Define functions that will be used here
+        def _timebin_lin_reg(psth,behav_df,value_type):
+            # regress fr against the given behavior calculated for this learning rate and set of regressors
+            # do this for each timebin
+            
+            fits = [utils.linear_encoding_regression(psth[:,k],behav_df,normalize_across_trials) for k in range(N_TIMEBINS)]
+            
+            fit_fpvals = np.array([f.f_pvalue for f in fits])
+            reg_pvals = np.array([f.pvalues[value_type] for f in fits])
+            beta_coefs = np.array([f.params[value_type] for f in fits])
+            rsqrs = np.array([f.rsquared for f in fits])
+            lls = np.array([f.llf for f in fits])
+            
+            return fit_fpvals, reg_pvals, beta_coefs, rsqrs, lls
+        
+        def _lr_timebin_lin_reg(learning_rates,Behavior,psth,trials,regressors):
+            # Do timebin_lin_reg() but for any given learning rate(s)
+            
+            #get behav with any lrs for the current subsess
+            Behavior.get_behavior(Q_learning=True,learning_rates=learning_rates,value_model=value_model)
+            behav_subsess = Behavior.behavior_df[regressors].iloc[trials]
+            
+            # regress fr against the behavior calculated for this learning rate and set of regressors
+            # do this for each timebin
+            fit_fpvals, reg_pvals, beta_coefs, rsqrs, lls = _timebin_lin_reg(psth_subsess,behav_subsess,neuron_type)
+            
+            return fit_fpvals, reg_pvals, beta_coefs, rsqrs, lls
+        
+        def _best_ll_lr_timebin_lin_reg(learning_rates,Behavior,psth,trials,regressors):
+            # Do lr_timebin_lin_reg() and return the avg of the best N log likelihoods, where N=ENCODING_NCONSEC
+            
+            _, _, _, _, lls = _lr_timebin_lin_reg(learning_rates,Behavior,psth,trials,regressors)
+
+            return utils.mean_of_top_n_of_arr(lls,n_consec)
+        
+        
+        
+        
     
         units = psth_dict.keys
         print(f'{len(units)} neurons')
         
-        learning_rate_grid = lr_grid_behav_dict['learning rate grid']
+        #this is an array of lrs to test
+        learning_rate_grid = lr_grid_behav_dict[value_model]['learning rate grid'] 
         
         df_rows_learning_rates = [] #to save out info in a df
         for stable_or_volatile in SUBSESSIONS:        
@@ -173,12 +175,19 @@ class Process_LearningRates:
                 
                 start = time.time()
                 
+                #get psths for unit
                 psths = psth_dict[unit] #shape = n_trials x n_timebins
                 assert psths.shape == (len(Behavior.behavior_df), N_TIMEBINS)
                 
+                #normalize if specified
+                if normalize_within_trials:
+                    psths = sp.stats.zscore(psths,axis=1)
+                    
+                #get trials for subsession
                 psth_subsess = psths[trials,:] #psths for all subsession trials
                 
-                if 'Dual' in VALUE_MODEL: #dual LR
+                ## Dual LR Case
+                if 'Dual' in value_model: 
                 
                     ## Do regression for all learning rate combos
                     ## Keep regressor set and learning rate(s) that fit best
@@ -191,7 +200,7 @@ class Process_LearningRates:
                         for neg_alpha in learning_rate_grid:
                             
                             pos_alpha, neg_alpha = np.round([pos_alpha,neg_alpha],decimals=2) # to help with floating point errors
-                            behavior_df = lr_grid_behav_dict['data'][(pos_alpha, neg_alpha)]
+                            behavior_df = lr_grid_behav_dict[value_model]['data'][(pos_alpha, neg_alpha)]
                             
                             # get set of regressors 
                             for value_type,regressors in REGRESSOR_SUPERSET_DICT.items():
@@ -200,123 +209,165 @@ class Process_LearningRates:
                                 
                                 # regress fr against the behavior calculated for this learning rate and set of regressors
                                 # do this for each timebin
-                                fits = [utils.linear_encoding_regression(psth_subsess[:,k],behav_subsess) for k in range(N_TIMEBINS)]
-                                
-                                fit_pvals = np.array([f.f_pvalue for f in fits])
-                                reg_pval = np.array([f.pvalues[value_type] for f in fits])
-                                betas = np.array([f.params[value_type] for f in fits])
-                                rsqrs = np.array([f.rsquared for f in fits])
+                                fit_fpvals, reg_pvals, beta_coefs, rsqrs, lls = _timebin_lin_reg(psth_subsess,behav_subsess,neuron_type,N_TIMEBINS)
                                 
                                 # only consider if regression and value regressor are both significant
-                                is_signif,signif_bin_idxs = utils.find_sig_bins(reg_pval, fit_pvals, alpha=ALPHAGOHERE, n_consec=NCONSEC)
-                                if is_signif: FIND WAY TO DEAL WITH OR FIND BEST IDXS OR WHEN TO USE ONLY BEST IDXS
+                                is_signif,signif_bin_idxs = utils.find_sig_bins(fit_fpvals, reg_pvals, encoding_alpha_thresh, n_consec)
+                                if is_signif: 
+                                    
+                                    #avg of best rsqrs only. So as to not punish if more bins are signif but with lower rsqr
+                                    avg_rsqr = utils.mean_of_top_n_of_arr(rsqrs,n_consec) 
                                     
                                     # take lr and value type if it yields the best rsqr so far, otherwise continue on
-                                    avg_rsqr = utils.mean_of_top_n_of_arr(rsqrs,NCONSEC)
                                     if avg_rsqr > best_rsqr:
                                         best_rsqr = avg_rsqr
                                         best_learning_rates = [pos_alpha,neg_alpha]
                                         neuron_type = value_type
-                                        avg_beta = 
-                                        
-                                        
-                    #save out info for unit
-                    lr_row_dict_1 = {'Unit':f'{unit} - {stable_or_volatile}',
-                                   'Neuron Type': neuron_type,
-                                   'Pos Learning Rate': best_learning_rates[0],
-                                   'Neg Learning Rate': best_learning_rates[1],
-                                   'R-Squared': best_rsqr}
-                    df_rows_learning_rates_grid.append(lr_row_dict_1)
+                                        betas = beta_coefs[signif_bin_idxs]
+                                        bin_idxs = signif_bin_idxs
+    
                 
                     ## Refine grid search using optimizer
                     if neuron_type != 'None':
-                        nll = lambda *args: -1*utils.lr_reg(*args).llf
+                        regressors = REGRESSOR_SUPERSET_DICT[neuron_type]
+                        
+                        nll = lambda *args: -1*_best_ll_lr_timebin_lin_reg(*args)
                         x0 = best_learning_rates  # [pos_alpha, neg_alpha]
                         result_A = sp.optimize.minimize(nll, x0, 
-                        		   args=(Behavior,fr,trials,REGRESSOR_SUPERSET_DICT[neuron_type]),
+                        		   args=(Behavior,psth_subsess,trials,regressors),
                         		   bounds=[(0.01,1), (0.01,1)],
                         		   method='Nelder-Mead',
-                                   tol=1e-3)
-                        best_learning_rates = result_A["x"]
+                                   tol=1e-4)
+                        [pos_alpha,neg_alpha] = result_A["x"]
+                        
+                        ## Redo timebin regs with optimized lrs to see if it is actually better
+                        fit_fpvals, reg_pvals, beta_coefs, rsqrs, lls = _lr_timebin_lin_reg([pos_alpha,neg_alpha],Behavior,psth_subsess,neuron_type,regressors)
+                        
+                        # only consider if regression and value regressor are both significant
+                        is_signif,signif_bin_idxs = utils.find_sig_bins(fit_fpvals, reg_pvals, encoding_alpha_thresh, n_consec)
+                        if is_signif: 
+                            
+                            #avg of best rsqrs only. So as to not punish if more bins are signif but with lower rsqr
+                            avg_rsqr = utils.mean_of_top_n_of_arr(rsqrs,n_consec) 
+                            
+                            # take lr and value type if it yields the best rsqr so far
+                            if avg_rsqr > best_rsqr:
+                                best_rsqr = avg_rsqr
+                                best_learning_rates = [pos_alpha,neg_alpha]
+                                neuron_type = value_type
+                                betas = beta_coefs[signif_bin_idxs]
+                                bin_idxs = signif_bin_idxs
+                            
                     
-                        #save out info for unit
-                        lr_row_dict = {'Unit':f'{unit} - {stable_or_volatile}',
-                                       'Neuron Type': neuron_type,
-                                       'Pos Learning Rate': best_learning_rates[0],
-                                       'Neg Learning Rate': best_learning_rates[1],
-                                       'R-Squared': utils.lr_reg(best_learning_rates,Behavior,fr,trials,REGRESSOR_SUPERSET_DICT[neuron_type]).rsquared}
-                        df_rows_learning_rates.append(lr_row_dict)
-                        
-                        
-                if 'Dual' not in VALUE_MODEL:
+                    #save out info for unit
+                    lr_row_dict = {'Unit': unit,
+                                   'Subsession': stable_or_volatile,
+                                   'Neuron Type': neuron_type,
+                                   'Pos Learning Rate': best_learning_rates[0],
+                                   'Neg Learning Rate': best_learning_rates[1],
+                                   'Timebin Indices': bin_idxs,
+                                   'Beta Coefs': betas,
+                                   'R-Squared': best_rsqr}
+                    df_rows_learning_rates.append(lr_row_dict)
+                    
+                    
+                    
+                ## Single LR Case    
+                if 'Dual' not in value_model:
                     
                     ## Do regression for all learning rate combos
                     ## Keep regressor set and learning rate(s) that fit best
                     best_rsqr = 0.
-                    best_learning_rate = 'None'
+                    best_learning_rates = 'None'
                     neuron_type = 'None'
-                    
+                
                     ##Grid search
                     for alpha in learning_rate_grid:
                             
                         alpha = np.round(alpha,decimals=2) # to help with floating point errors
-                        behavior_df = lr_grid_behav_dict['data'][(alpha)]
+                        behavior_df = lr_grid_behav_dict[value_model]['data'][(alpha)]
                         
                         # get set of regressors 
                         for value_type,regressors in REGRESSOR_SUPERSET_DICT.items():
-                                    
+                            
+                            behav_subsess = behavior_df[regressors].iloc[trials]       
+                            
                             # regress fr against the behavior calculated for this learning rate and set of regressors
-                            res = utils.linear_encoding_regression(fr,behavior_df[regressors].iloc[trials])
+                            # do this for each timebin
+                            fit_fpvals, reg_pvals, beta_coefs, rsqrs, lls = _timebin_lin_reg(psth_subsess,behav_subsess,neuron_type,N_TIMEBINS)
                             
                             # only consider if regression and value regressor are both significant
-                            if res.f_pvalue < ALPHA_THRESHOLD and res.pvalues[value_type] < ALPHA_THRESHOLD:
+                            is_signif,signif_bin_idxs = utils.find_sig_bins(fit_fpvals, reg_pvals, encoding_alpha_thresh, n_consec)
+                            if is_signif: 
+                                
+                                #avg of best rsqrs only. So as to not punish if more bins are signif but with lower rsqr
+                                avg_rsqr = utils.mean_of_top_n_of_arr(rsqrs,n_consec) 
                                 
                                 # take lr and value type if it yields the best rsqr so far, otherwise continue on
-                                if res.rsquared > best_rsqr:
-                                    best_rsqr = res.rsquared
-                                    best_learning_rate = alpha
+                                if avg_rsqr > best_rsqr:
+                                    best_rsqr = avg_rsqr
+                                    best_learning_rates = [alpha]
                                     neuron_type = value_type
-                                        
-                                        
-                    #save out info for unit
-                    lr_row_dict_1 = {'Unit':f'{unit} - {stable_or_volatile}',
-                                   'Neuron Type': neuron_type,
-                                   'Learning Rate': best_learning_rate,
-                                   'R-Squared': best_rsqr}
-                    df_rows_learning_rates_grid.append(lr_row_dict_1)
+                                    betas = beta_coefs[signif_bin_idxs]
+                                    bin_idxs = signif_bin_idxs
+    
                 
                     ## Refine grid search using optimizer
                     if neuron_type != 'None':
-                        nll = lambda *args: -1*utils.lr_reg(*args).llf
-                        x0 = best_learning_rate  # [pos_alpha, neg_alpha]
+                        regressors = REGRESSOR_SUPERSET_DICT[neuron_type]
+                        
+                        nll = lambda *args: -1*_best_ll_lr_timebin_lin_reg(*args)
+                        x0 = best_learning_rates  # [alpha]
                         result_A = sp.optimize.minimize(nll, x0, 
-                                   args=(Behavior,fr,trials,REGRESSOR_SUPERSET_DICT[neuron_type]),
-                                   bounds=[(0.01,1)],
-                                   method='Nelder-Mead',
-                                   tol=1e-3)
-                        best_learning_rate = result_A["x"]
+                        		   args=(Behavior,psth_subsess,trials,regressors),
+                        		   bounds=[(0.01,1), (0.01,1)],
+                        		   method='Nelder-Mead',
+                                   tol=1e-4)
+                        [alpha] = result_A["x"]
+                        
+                        ## Redo timebin regs with optimized lrs to see if it is actually better
+                        fit_fpvals, reg_pvals, beta_coefs, rsqrs, lls = _lr_timebin_lin_reg([alpha],Behavior,psth_subsess,neuron_type,regressors)
+                        
+                        # only consider if regression and value regressor are both significant
+                        is_signif,signif_bin_idxs = utils.find_sig_bins(fit_fpvals, reg_pvals, encoding_alpha_thresh, n_consec)
+                        if is_signif: 
+                            
+                            #avg of best rsqrs only. So as to not punish if more bins are signif but with lower rsqr
+                            avg_rsqr = utils.mean_of_top_n_of_arr(rsqrs,n_consec) 
+                            
+                            # take lr and value type if it yields the best rsqr so far
+                            if avg_rsqr > best_rsqr:
+                                best_rsqr = avg_rsqr
+                                best_learning_rates = [alpha]
+                                neuron_type = value_type
+                                betas = beta_coefs[signif_bin_idxs]
+                                bin_idxs = signif_bin_idxs
+                            
                     
-                        #save out info for unit
-                        lr_row_dict = {'Unit':f'{unit} - {stable_or_volatile}',
-                                       'Neuron Type': neuron_type,
-                                       'Learning Rate': best_learning_rate,
-                                       'R-Squared': utils.lr_reg(best_learning_rate,Behavior,fr,trials,REGRESSOR_SUPERSET_DICT[neuron_type]).rsquared}
-                        df_rows_learning_rates.append(lr_row_dict)
-                    
+                    #save out info for unit
+                    lr_row_dict = {'Unit': unit,
+                                   'Subsession': stable_or_volatile,
+                                   'Neuron Type': neuron_type,
+                                   'Learning Rate': best_learning_rates[0],
+                                   'Timebin Indices': bin_idxs,
+                                   'Beta Coefs': betas,
+                                   'R-Squared': best_rsqr}
+                    df_rows_learning_rates.append(lr_row_dict)
+                
                 utils.get_time_left(start,i,len(units))
                                 
-        learning_rate_df = pd.DataFrame(df_rows_learning_rates) #rows: units x subsessions, cols: lrs for each reg
-        learning_rate_df_grid = pd.DataFrame(df_rows_learning_rates_grid) #rows: units x subsessions, cols: lrs for each reg
+        learning_rate_df = pd.DataFrame(df_rows_learning_rates) #rows: units x subsessions
         # utils.save_csv(learning_rate_df,'LR',"debug",DATA_FOLDER)
 
-        return learning_rate_df, learning_rate_df_grid
+        return learning_rate_df
 
 
 class LearningRate_Analysis:
     
-    def __init__(self,do_stable_first_only=False,do_volatile_first_only=False):
+    def __init__(self,file_name,do_stable_first_only=False,do_volatile_first_only=False):
         
         self.fig_folder = 'LearningRates'
+        self.file_name = file_name
        
         self.lr_dfs = []
         for s,session in enumerate(SESSIONS):
@@ -331,13 +382,10 @@ class LearningRate_Analysis:
                     continue #skip vol first
             
             # Load learning rate for each sess
-            # learning_rate_df = utils.load_csv('LearningRates',session,DATA_FOLDER)
-            learning_rate_df = utils.load_csv('LearningRatesGridSearch',session,DATA_FOLDER)
+            learning_rate_df = utils.load_csv(file_name,session,DATA_FOLDER)
             self.lr_dfs.append(learning_rate_df)
        
         self.allsess_lr_df = utils.merge_sessions_df(self.lr_dfs)
-        # utils.save_csv(self.allsess_lr_df,'LearningRates','',DATA_FOLDER)
-        utils.save_csv(self.allsess_lr_df,'LearningRatesGridSearch','',DATA_FOLDER)
         
         if do_stable_first_only:
             suptitle = 'Stable to Volatile Sessions'
@@ -357,9 +405,9 @@ class LearningRate_Analysis:
         # self.plot_winbias_hist(self.allsess_lr_df,self.allsess_nt_df,suptitle,self.fig_folder)
         # self.new_scatter_hists(self.allsess_lr_df)
         
-        self.plot_learning_rate_hist_neuron_type_single(self.allsess_lr_df,'Qchosen','Qchosen - all sess',self.fig_folder)
-        self.plot_learning_rate_hist_neuron_type_single(self.allsess_lr_df,'Q1','Q1 - all sess',self.fig_folder)
-        self.plot_learning_rate_hist_neuron_type_single(self.allsess_lr_df,'Q2','Q2 - all sess',self.fig_folder)
+        self.plot_learning_rate_hist_neuron_type(file_name,self.allsess_lr_df,'Qchosen',f'{file_name}\nQchosen - {suptitle}',self.fig_folder)
+        self.plot_learning_rate_hist_neuron_type(file_name,self.allsess_lr_df,'Q1',f'{file_name}\nQ1 - {suptitle}',self.fig_folder)
+        self.plot_learning_rate_hist_neuron_type(file_name,self.allsess_lr_df,'Q2',f'{file_name}\nQ2 - {suptitle}',self.fig_folder)
         
         # self.plot_lr_vs_rsqr(self.allsess_lr_df,suptitle)
         return
@@ -408,7 +456,7 @@ class LearningRate_Analysis:
     
 
     @staticmethod
-    def plot_learning_rate_hist_neuron_type(learning_rate_df, neuron_type, suptitle, fig_folder):
+    def plot_learning_rate_hist_neuron_type(file_name, learning_rate_df, neuron_type, suptitle, fig_folder):
         
         # areas = AREAS + ['all areas']
         areas = AREAS
@@ -427,299 +475,265 @@ class LearningRate_Analysis:
             #get all neurons which encode specified neuron_type
             area_type_learning_rate_df = area_learning_rate_df[area_learning_rate_df['Neuron Type'].str.contains(neuron_type)]
 
-            #all trials
-            fig,axs=plt.subplots(1,2,layout='constrained')
-            
-            for i,pos_neg in enumerate(['Pos','Neg']):
+            if 'dual' in file_name:
+
+                                                                                                #all trials
+                fig,axs=plt.subplots(1,2,layout='constrained')
                 
-                # Get stable and volatile lrs
-                alltr_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('all trials')]
-                alltrs = pd.to_numeric(alltr_learning_rate_df[f'{pos_neg} Learning Rate'].values)
-                #hists
-                ax=axs[i]
-                ax.hist(alltrs,label=f'all trials, n={len(alltrs)}',bins=20,range=(0,1),alpha=0.5,color='tab:green')
-                #mean markers
-                y_max1 = np.max(np.histogram(alltrs,bins=20,range=(0,1))[0])
-                y_max = np.max(y_max1)
-                ax.plot(np.mean(alltrs),y_max,marker='v',color='tab:green')
-                #plot details
-                ax.set_title(f'{pos_neg} LR Hist')
-                ax.set_ylabel('Number of neurons')
-                ax.set_xlabel('Learning Rate')
-                ax.legend()
-                fig.suptitle(suptitle + f'\n{area}')
-            
-            
-            #stable vs volatile overlay
-            fig,axs=plt.subplots(1,2,layout='constrained')
-            
-            for i,pos_neg in enumerate(['Pos','Neg']):
+                for i,pos_neg in enumerate(['Pos','Neg']):
+                    
+                    # Get stable and volatile lrs
+                    alltr_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('all trials')]
+                    alltrs = pd.to_numeric(alltr_learning_rate_df[f'{pos_neg} Learning Rate'].values)
+                    #hists
+                    ax=axs[i]
+                    ax.hist(alltrs,label=f'all trials, n={len(alltrs)}',bins=20,range=(0,1),alpha=0.5,color='tab:green')
+                    #mean markers
+                    y_max1 = np.max(np.histogram(alltrs,bins=20,range=(0,1))[0])
+                    y_max = np.max(y_max1)
+                    ax.plot(np.mean(alltrs),y_max,marker='v',color='tab:green')
+                    #plot details
+                    ax.set_title(f'{pos_neg} LR Hist')
+                    ax.set_ylabel('Number of neurons')
+                    ax.set_xlabel('Learning Rate')
+                    ax.legend()
+                    fig.suptitle(suptitle + f'\n{area}')
                 
-                # Get stable and volatile lrs
-                stab_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('stable')]
-                vol_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('volatile')]
-                stabs = pd.to_numeric(stab_learning_rate_df[f'{pos_neg} Learning Rate'].values)
-                vols = pd.to_numeric(vol_learning_rate_df[f'{pos_neg} Learning Rate'].values)
                 
-                #stats
-                res = sp.stats.ttest_ind(stabs, vols, equal_var=True)
-                #hists
-                ax=axs[i]
-                ax.hist(vols,label=f'volatile, n={len(vols)}',bins=20,range=(0,1),alpha=0.5,color='tab:blue')
-                ax.hist(stabs,label=f'stable, n={len(stabs)}',bins=20,range=(0,1),alpha=0.5,color='tab:orange')
-                #mean markers
-                y_max1 = np.max(np.histogram(vols,bins=20,range=(0,1))[0])
-                y_max2 = np.max(np.histogram(stabs,bins=20,range=(0,1))[0])
-                y_max = np.max([y_max1,y_max2])
-                ax.plot(np.mean(vols),y_max,marker='v',color='tab:blue')
-                ax.plot(np.mean(stabs),y_max,marker='v',color='tab:orange')
-                #plot details
-                ax.set_title(f'{pos_neg} LR Hist\np={res.pvalue:.4f}')
-                ax.set_ylabel('Number of neurons')
-                ax.set_xlabel('Learning Rate')
-                ax.legend()
-                fig.suptitle(suptitle + f'\n{area}')
+                #stable vs volatile overlay
+                fig,axs=plt.subplots(1,2,layout='constrained')
+                
+                for i,pos_neg in enumerate(['Pos','Neg']):
+                    
+                    # Get stable and volatile lrs
+                    stab_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('stable')]
+                    vol_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('volatile')]
+                    stabs = pd.to_numeric(stab_learning_rate_df[f'{pos_neg} Learning Rate'].values)
+                    vols = pd.to_numeric(vol_learning_rate_df[f'{pos_neg} Learning Rate'].values)
+                    
+                    #stats
+                    res = sp.stats.ttest_ind(stabs, vols, equal_var=True)
+                    #hists
+                    ax=axs[i]
+                    ax.hist(vols,label=f'volatile, n={len(vols)}',bins=20,range=(0,1),alpha=0.5,color='tab:blue')
+                    ax.hist(stabs,label=f'stable, n={len(stabs)}',bins=20,range=(0,1),alpha=0.5,color='tab:orange')
+                    #mean markers
+                    y_max1 = np.max(np.histogram(vols,bins=20,range=(0,1))[0])
+                    y_max2 = np.max(np.histogram(stabs,bins=20,range=(0,1))[0])
+                    y_max = np.max([y_max1,y_max2])
+                    ax.plot(np.mean(vols),y_max,marker='v',color='tab:blue')
+                    ax.plot(np.mean(stabs),y_max,marker='v',color='tab:orange')
+                    #plot details
+                    ax.set_title(f'{pos_neg} LR Hist\np={res.pvalue:.4f}')
+                    ax.set_ylabel('Number of neurons')
+                    ax.set_xlabel('Learning Rate')
+                    ax.legend()
+                    fig.suptitle(suptitle + f'\n{area}')
+                    
+                    
+                    
+                if 'dual' not in file_name:
+                    
+                    #all trials
+                    fig,ax=plt.subplots(layout='constrained')
+                        
+                    # Get stable and volatile lrs
+                    alltr_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('all trials')]
+                    alltrs = pd.to_numeric(alltr_learning_rate_df['Learning Rate'].values)
+                    # alltrs = pd.to_numeric(alltr_learning_rate_df['Learning Rate'].str.removeprefix('[').str.removesuffix(']').values)
+                    #hists
+                    ax.hist(alltrs,label=f'all trials, n={len(alltrs)}',bins=20,range=(0,1),alpha=0.5,color='tab:green')
+                    #mean markers
+                    y_max1 = np.max(np.histogram(alltrs,bins=20,range=(0,1))[0])
+                    y_max = np.max(y_max1)
+                    ax.plot(np.mean(alltrs),y_max,marker='v',color='tab:green')
+                    #plot details
+                    ax.set_title('LR Hist')
+                    ax.set_ylabel('Number of neurons')
+                    ax.set_xlabel('Learning Rate')
+                    ax.legend()
+                    fig.suptitle(suptitle + f'\n{area}')
+                    
+                    
+                    #stable vs volatile overlay
+                    fig,ax=plt.subplots(layout='constrained')
+                        
+                    # Get stable and volatile lrs
+                    stab_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('stable')]
+                    vol_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('volatile')]
+                    stabs = pd.to_numeric(stab_learning_rate_df['Learning Rate'].values)
+                    vols = pd.to_numeric(vol_learning_rate_df['Learning Rate'].values)
+                    # stabs = pd.to_numeric(stab_learning_rate_df['Learning Rate'].str.removeprefix('[').str.removesuffix(']').values)
+                    # vols = pd.to_numeric(vol_learning_rate_df['Learning Rate'].str.removeprefix('[').str.removesuffix(']').values)
+                    
+                    #stats
+                    res = sp.stats.ttest_ind(stabs, vols, equal_var=True)
+                    #hists
+                    ax.hist(vols,label=f'volatile, n={len(vols)}',bins=20,range=(0,1),alpha=0.5,color='tab:blue')
+                    ax.hist(stabs,label=f'stable, n={len(stabs)}',bins=20,range=(0,1),alpha=0.5,color='tab:orange')
+                    #mean markers
+                    y_max1 = np.max(np.histogram(vols,bins=20,range=(0,1))[0])
+                    y_max2 = np.max(np.histogram(stabs,bins=20,range=(0,1))[0])
+                    y_max = np.max([y_max1,y_max2])
+                    ax.plot(np.mean(vols),y_max,marker='v',color='tab:blue')
+                    ax.plot(np.mean(stabs),y_max,marker='v',color='tab:orange')
+                    #plot details
+                    ax.set_title(f'LR Hist\np={res.pvalue:.4f}')
+                    ax.set_ylabel('Number of neurons')
+                    ax.set_xlabel('Learning Rate')
+                    ax.legend()
+                    fig.suptitle(suptitle + f'\n{area}')
                 
         return  
-
-
-    @staticmethod
-    def plot_learning_rate_hist_neuron_type_single(learning_rate_df, neuron_type, suptitle, fig_folder):
-        
-        # areas = AREAS + ['all areas']
-        areas = AREAS
-        # cols = ['Learning Rate for Qchosen']
-    
-        for i, area in enumerate(areas):
-    
-            # area_neuron_type_df = utils.area_parser(neuron_type_df, area)
-            area_learning_rate_df = utils.area_parser(learning_rate_df, area)
-    
-            print(area)
-            if area_learning_rate_df.empty:
-                print('skipped!')
-                continue
-    
-            #get all neurons which encode specified neuron_type
-            area_type_learning_rate_df = area_learning_rate_df[area_learning_rate_df['Neuron Type'].str.contains(neuron_type)]
-
-            #all trials
-            fig,ax=plt.subplots(layout='constrained')
-                
-            # Get stable and volatile lrs
-            alltr_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('all trials')]
-            alltrs = pd.to_numeric(alltr_learning_rate_df['Learning Rate'].values)
-            # alltrs = pd.to_numeric(alltr_learning_rate_df['Learning Rate'].str.removeprefix('[').str.removesuffix(']').values)
-            #hists
-            ax.hist(alltrs,label=f'all trials, n={len(alltrs)}',bins=20,range=(0,1),alpha=0.5,color='tab:green')
-            #mean markers
-            y_max1 = np.max(np.histogram(alltrs,bins=20,range=(0,1))[0])
-            y_max = np.max(y_max1)
-            ax.plot(np.mean(alltrs),y_max,marker='v',color='tab:green')
-            #plot details
-            ax.set_title('LR Hist')
-            ax.set_ylabel('Number of neurons')
-            ax.set_xlabel('Learning Rate')
-            ax.legend()
-            fig.suptitle(suptitle + f'\n{area}')
-            
-            
-            #stable vs volatile overlay
-            fig,ax=plt.subplots(layout='constrained')
-                
-            # Get stable and volatile lrs
-            stab_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('stable')]
-            vol_learning_rate_df = area_type_learning_rate_df[area_type_learning_rate_df['Unit'].str.contains('volatile')]
-            stabs = pd.to_numeric(stab_learning_rate_df['Learning Rate'].values)
-            vols = pd.to_numeric(vol_learning_rate_df['Learning Rate'].values)
-            # stabs = pd.to_numeric(stab_learning_rate_df['Learning Rate'].str.removeprefix('[').str.removesuffix(']').values)
-            # vols = pd.to_numeric(vol_learning_rate_df['Learning Rate'].str.removeprefix('[').str.removesuffix(']').values)
-            
-            #stats
-            res = sp.stats.ttest_ind(stabs, vols, equal_var=True)
-            #hists
-            ax.hist(vols,label=f'volatile, n={len(vols)}',bins=20,range=(0,1),alpha=0.5,color='tab:blue')
-            ax.hist(stabs,label=f'stable, n={len(stabs)}',bins=20,range=(0,1),alpha=0.5,color='tab:orange')
-            #mean markers
-            y_max1 = np.max(np.histogram(vols,bins=20,range=(0,1))[0])
-            y_max2 = np.max(np.histogram(stabs,bins=20,range=(0,1))[0])
-            y_max = np.max([y_max1,y_max2])
-            ax.plot(np.mean(vols),y_max,marker='v',color='tab:blue')
-            ax.plot(np.mean(stabs),y_max,marker='v',color='tab:orange')
-            #plot details
-            ax.set_title(f'LR Hist\np={res.pvalue:.4f}')
-            ax.set_ylabel('Number of neurons')
-            ax.set_xlabel('Learning Rate')
-            ax.legend()
-            fig.suptitle(suptitle + f'\n{area}')
-                
-        return 
-
-    
-    
-        
-    def run_tuning_curves(self):
+ 
+    @staticmethod    
+    def run_scatter_plot_tuning_curves(session_to_plot,file_name):
         
         for s,session in enumerate(SESSIONS):
+
+            #choose which session to do (optional)
+            if session_to_plot:
+                cond = session == session_to_plot
+            else:
+                cond = True
             
-            start = time.time()
-            
-            print(session)
-            
-            
-            Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
-            neuron_type_df = utils.load_csv('NeuronTypes',session,DATA_FOLDER)
-            learning_rate_df = utils.load_csv('LearningRates',session,DATA_FOLDER)
-            
-            print('data loaded')
-            
-            plot_tuning_curves(Spikes.fr_df,Behav.behavior_df,neuron_type_df,learning_rate_df)
-            
-            utils.get_time_left(start,s,len(SESSIONS))        
+            if cond:
+                start = time.time()
+                print(session)
+                
+                Spikes, Behav, LFP = get_Spikes_Behav_LFP(s,session)
+                learning_rate_df = utils.load_csv(file_name,session,DATA_FOLDER)
+                
+                print('data loaded')
+                
+                LearningRate_Analysis.plot_scatter_tuning_curves_value(Spikes.fr_df,Behav.behavior_df,learning_rate_df)
+                
+                utils.get_time_left(start,s,len(SESSIONS))        
             
         return
-    
-def plot_tuning_curves_value(fr_df,behavior_df,learning_rate_df):
-    assert len(fr_df) == len(behavior_df)
-    
-    # units = list(fr_df.keys())
-    # units = utils.get_unique_units(learning_rate_df["Unit"], SUBSESSIONS)
-    subsession = 'all trials'
-    
-    #only plot neurons that were found to encode during specified subsession
-    units = learning_rate_df["Unit"].loc[learning_rate_df["Unit"].str.endswith(subsession)]
-    units = units.str.removesuffix(f' - {subsession}')
-    
-    if len(units) < 1:
-        return None #skip whole thing if there aren't any units for this session
-    
-    for i,unit in enumerate(units): #loop thru all units of session
-    
-        neuron_type = str(utils.get_unit_data(learning_rate_df,f'{unit} - {subsession}','Neuron Type'))
-        # print(unit)
-        # print(neuron_type)
-        
-        if 'Q' not in neuron_type: #only do for value neurons
-            continue
-        
-        if 'Unit A' in unit: #exclude vmPFC
-            continue
-        
-        #get values relevant to neuron type
-        values = behavior_df[neuron_type]
-        
-        exclude = 0.05
-        excl_top = 1-exclude
-        include = (values>exclude) & (values<excl_top)
-        
-        x = values.iloc[include]
-        y = fr_df[unit].iloc[include]
-        
-        #find the trials corresponding to value bins, then get values and frs of those trials
-        value_bins = np.linspace(0, 1, 6)
-        binned_value_avg = np.zeros(len(value_bins)-1)
-        binned_value_sem = np.zeros_like(binned_value_avg)
-        binned_fr_avg = np.zeros_like(binned_value_avg)
-        binned_fr_sem = np.zeros_like(binned_value_avg)
-        for j, (bot, top) in enumerate(zip(value_bins[:-1], value_bins[1:])):
-            trials = np.nonzero((x>bot)&(x<top))[0]
-            binned_value_avg[j], binned_value_sem[j] = utils.get_avg_sem(x.iloc[trials],axis=0)
-            binned_fr_avg[j], binned_fr_sem[j] = utils.get_avg_sem(y.iloc[trials],axis=0)
-        
-        #plotit
-        fig,ax = plt.subplots(layout="constrained")
-        ax.errorbar(binned_value_avg, binned_fr_avg, xerr=binned_value_sem, yerr=binned_fr_sem,color='k')
-
-        ax.scatter(x,y,alpha=0.05,color='k')
-        ax.plot(np.unique(x), np.poly1d(np.polyfit(x, y, 1))(np.unique(x)),'-',color='red')
-        r,pval = sp.stats.pearsonr(x,y)
-        ax.set_xlabel(neuron_type)
-        ax.set_ylabel('Z-scored FR')
-        ax.set_title(f'Value encoding tuning curve. Outer {exclude} excluded.\nRSqr={r**2}')
-        ax.set_ylim([-1,1])
-        
-        fig.suptitle(f'{unit}\n{neuron_type} encoding unit')
-        plt.show()
-    
-    
-    return    
 
 
+    @staticmethod    
+    def plot_scatter_tuning_curves_value(fr_df,behavior_df,learning_rate_df):
+        assert len(fr_df) == len(behavior_df)
+        
+        # units = list(fr_df.keys())
+        # units = utils.get_unique_units(learning_rate_df["Unit"], SUBSESSIONS)
+        subsession = 'all trials'
+        
+        #only plot neurons that were found to encode during specified subsession
+        units = learning_rate_df["Unit"].loc[learning_rate_df["Unit"].str.endswith(subsession)]
+        units = units.str.removesuffix(f' - {subsession}')
+        
+        if len(units) < 1:
+            return None #skip whole thing if there aren't any units for this session
+        
+        for i,unit in enumerate(units): #loop thru all units of session
+        
+            neuron_type = str(utils.get_unit_data(learning_rate_df,f'{unit} - {subsession}','Neuron Type'))
+            # print(unit)
+            # print(neuron_type)
+            
+            if 'Q' not in neuron_type: #only do for value neurons
+                continue
+            
+            if 'Unit A' in unit: #exclude vmPFC
+                continue
+            
+            #get values relevant to neuron type
+            values = behavior_df[neuron_type]
+            
+            exclude = 0.05
+            excl_top = 1-exclude
+            include = (values>exclude) & (values<excl_top)
+            
+            x = values.iloc[include]
+            y = fr_df[unit].iloc[include]
+            
+            #find the trials corresponding to value bins, then get values and frs of those trials
+            value_bins = np.linspace(0, 1, 6)
+            binned_value_avg = np.zeros(len(value_bins)-1)
+            binned_value_sem = np.zeros_like(binned_value_avg)
+            binned_fr_avg = np.zeros_like(binned_value_avg)
+            binned_fr_sem = np.zeros_like(binned_value_avg)
+            for j, (bot, top) in enumerate(zip(value_bins[:-1], value_bins[1:])):
+                trials = np.nonzero((x>bot)&(x<top))[0]
+                binned_value_avg[j], binned_value_sem[j] = utils.get_avg_sem(x.iloc[trials],axis=0)
+                binned_fr_avg[j], binned_fr_sem[j] = utils.get_avg_sem(y.iloc[trials],axis=0)
+            
+            #plotit
+            fig,ax = plt.subplots(layout="constrained")
+            ax.errorbar(binned_value_avg, binned_fr_avg, xerr=binned_value_sem, yerr=binned_fr_sem,color='k')
+    
+            ax.scatter(x,y,alpha=0.05,color='k')
+            ax.plot(np.unique(x), np.poly1d(np.polyfit(x, y, 1))(np.unique(x)),'-',color='red')
+            r,pval = sp.stats.pearsonr(x,y)
+            ax.set_xlabel(neuron_type)
+            ax.set_ylabel('Z-scored FR')
+            ax.set_title(f'Value encoding tuning curve. Outer {exclude} excluded.\nRSqr={r**2}')
+            ax.set_ylim([-1,1])
+            
+            fig.suptitle(f'{unit}\n{neuron_type} encoding unit')
+            plt.show()
+        
+        
+        return    
+    
+    def rainbow_plots():
+        salkdjf #move plot_temporal_encoding and do_rainbow_plots from encoding analysis to here.
+        #make it so taht plot_temporal_encoding loops through units like plot_scatter_tuning_curves_valeu does.
 
-def plot_tuning_curves(fr_df,behavior_df,neuron_type_df,learning_rate_df):
-    assert len(fr_df) == len(behavior_df)
-    num_trials = len(fr_df)
+        return
     
-    units = list(fr_df.keys())
-    
-    if len(units) < 1:
-        return None #skip whole thing if there aren't any units for this session
-    
-    for i,unit in enumerate(units): #loop thru all units of session
-    
-        neuron_type = str(utils.get_unit_data(neuron_type_df,unit+' - all trials','Neuron Type'))
-        print(unit)
-        print(neuron_type)
-        
-        if 'Q' not in neuron_type: #only do for value neurons
-            continue
-        
-        if 'Unit A' in unit: #exclude vmPFC
-            continue
-        
-        #get trials relevant to neuron type
-        if neuron_type == 'Qchosen':
-            trials = list(range(num_trials))
-        elif neuron_type == 'Q1':
-            trials = list(behavior_df.loc[(behavior_df['Choice1']==1)].index)
-        elif neuron_type == 'Q2':
-            trials = list(behavior_df.loc[(behavior_df['Choice2']==1)].index)
-         
-        #catch edge case problems since we are dealing with t+1
-        if trials[-1] >= num_trials-1:
-            trials = trials[:-1]
 
-        #get rpe of trials where he chose the relevant target and the change in fr on the very next trial
-        delta_fr = np.diff(fr_df[unit])[trials] #delta_fr = fr(t+1) - fr(t). Note fr is during the hold center (valuation) period
-        rpe = behavior_df['RPE'][trials] #rpe(t) = r(t) - Q(t)
-        
-        #color by optimism (aka winbias)
-        pos_lr = utils.get_unit_data(learning_rate_df,unit+ ' - all trials',f'Pos Learning Rate for {neuron_type}')
-        neg_lr = utils.get_unit_data(learning_rate_df,unit+ ' - all trials',f'Neg Learning Rate for {neuron_type}')
-        optimism = pos_lr - neg_lr #ranges from -1 to +1
-        if optimism > 0.33: #optimistic
-            left_color = 'gray'
-            right_color = 'blue'
-        elif optimism < -0.33: #pessimistic
-            left_color = 'blue'
-            right_color = 'gray'
-        else: #neutral
-            left_color = right_color = 'blue'
-        
-        #plotit
-        fig,ax = plt.subplots(layout="constrained")
-        #left half, neg rpe
-        color=left_color
-        x = rpe[rpe<-0.25]
-        y = delta_fr[rpe<-0.25]
-        ax.scatter(x,y,color=color,alpha=0.1)
-        ax.plot(np.unique(x), np.poly1d(np.polyfit(x, y, 1))(np.unique(x)),'-',color=color)
-        #right half, pos rpe
-        color=right_color
-        x = rpe[rpe>=0.25]
-        y = delta_fr[rpe>=0.25]
-        ax.scatter(x,y,color=color,alpha=0.1)
-        ax.plot(np.unique(x), np.poly1d(np.polyfit(x, y, 1))(np.unique(x)),'-',color=color)
-        
-        
-        ax.set_title('Optimism tuning curve')
-        ax.set_ylabel('Delta FR')
-        ax.set_xlabel('RPE')
-        
-        fig.suptitle(f'{unit}\n{neuron_type} encoding unit')
-        plt.show()
+ 
     
-    
-    return    
-    
+#%% Run
+
+### Get behavior for all learning rate grids (needs only be run once)
+# Process_LearningRates.get_learning_rate_grid_behavior()
+
+
+### Get best learning rate for each neuron
+
+file_name = 'LearningRates_dualbaslineside_evenntrials_acrosstrnorm_alpha005_nconsec3'
+_ = Process_LearningRates(  value_model='DualBaselineSide',
+                            do_even_num_trials=True,
+                            normalize_within_trials=False,
+                            normalize_across_trials=True,
+                            encoding_alpha_thresh=0.005,
+                            n_consec=3,     
+                            file_save_name=file_name)
+
+file_name = 'LearningRates_baslineside_evenntrials_acrosstrnorm_alpha005_nconsec3'
+_ = Process_LearningRates(  value_model='BaselineSide',
+                            do_even_num_trials=True,
+                            normalize_within_trials=False,
+                            normalize_across_trials=True,
+                            encoding_alpha_thresh=0.005,
+                            n_consec=3,     
+                            file_save_name=file_name)
+
+file_name = 'LearningRates_dualbaslineside_evenntrials_bothnorm_alpha005_nconsec3'
+_ = Process_LearningRates(  value_model='DualBaselineSide',
+                            do_even_num_trials=True,
+                            normalize_within_trials=True,
+                            normalize_across_trials=True,
+                            encoding_alpha_thresh=0.005,
+                            n_consec=3,     
+                            file_save_name=file_name)
+
+
+### Analyze learning rates
+
+# file_name = 'LearningRates_dualbaslineside_evenntrials_acrosstrnorm_alpha005_nconsec3'
+# _ = LearningRate_Analysis(file_name,do_stable_first_only=False,do_volatile_first_only=False)
+
+# file_name = 'LearningRates_baslineside_evenntrials_acrosstrnorm_alpha005_nconsec3'
+# _ = LearningRate_Analysis(file_name,do_stable_first_only=False,do_volatile_first_only=False)
+
+# file_name = 'LearningRates_dualbaslineside_evenntrials_bothnorm_alpha005_nconsec3'
+# _ = LearningRate_Analysis(file_name,do_stable_first_only=False,do_volatile_first_only=False)
+
+
 

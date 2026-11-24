@@ -37,6 +37,12 @@ def get_time_left(start_time,itr,n_itrs):
     print(f'--------------{itr+1}/{n_itrs} - {time_left} mins left--------------')
     return
 
+def get_time_left_big(start_time,itr,n_itrs):
+    print('*'*50,'\n','*'*50)
+    get_time_left(start_time,itr,n_itrs)
+    print('*'*50,'\n','*'*50)
+    return
+
 def flatten(xs):
     result = []
     if isinstance(xs, (list, tuple)):
@@ -266,59 +272,38 @@ def same_sign(arr):
     return bool(np.all(arr >= 0) or np.all(arr <= 0))
 
 #%% Regression
-def linear_encoding_regression(spikes,behavior):
+
+def linear_encoding_regression(spikes,behavior,normalize_fr_across_trials=True):
     '''
     Parameters
     ----------
-    spikes : (1 x num_trials) array of spiking information (psth timebin info or firing rate)
-    behavior : (num_trials x num_regressors) array of behavioral information (do not include const. This will be added internally)
+    spikes : (1 x num_trials) array of spiking information (psth timebin info or firing rate).
+    behavior : (num_trials x num_regressors) array of behavioral information (do not include const. This will be added internally).
+        behavior is automatically zscored across trials.
+    normalize_fr_across_trials : bool.
 
     Returns
     -------
-    f_pval : float. p-value for entire regression
-    pvals : (1 x num_regressors) array of p-values for each regressor
+    res : sm.OLS result object from which pvals, beta coefs, rsqrs, etc can be obtained
     '''
     assert np.shape(spikes)[0] == np.shape(behavior)[0]
     
-    # zscore behavior without losing column titles if possible
+    # zscore behavior 
     if isinstance(behavior, (pd.DataFrame, pd.Series)):
-        behavior_zscr = (behavior - behavior.mean()) / behavior.std()
+        behavior_zscr = (behavior - behavior.mean()) / behavior.std() #to not lose column titles if dataframe
     else:
         behavior_zscr = zscore(behavior,axis=0)
-    
-    # try:
-    #     model = sm.OLS(zscore(spikes,axis=0), sm.add_constant(behavior,has_constant='add'), missing='raise',hasconst=True)
-    # except:
-    #     print(behavior)
-    #     print(zscore(spikes,axis=0))
-    #     xxx
-    
-    try:
-        model = sm.OLS(zscore(spikes,axis=0), sm.add_constant(behavior_zscr,has_constant='add'), missing='raise',hasconst=True)
-    except: 
-        print(behavior)
-        print(spikes)
-        raise ValueError
-    # #Variance inflation factor analysis
-    # vif = np.array([variance_inflation_factor(behavior, i) for i in range(np.shape(behavior)[0])])
-    # vif_threshold = 5
-    # if np.sum(vif>vif_threshold) > 0:
-    #     idx = np.nonzero(vif>vif_threshold)[0]
-    #     print('-'*50)
-    #     print('COLLINEARITY WARNING')
-    #     # print(f'Regressor(s): {[self.regressors[i] for i in idx]}')
-    #     # fig,ax = plt.subplots()
-    #     # ax.plot(behavior)
-    #     # xxx        
-    res = model.fit()
-    # print(res.pvalues)
-    # pvals = res.pvalues[1:] #exclude constant (position 0)
-    # f_pval = res.f_pvalue
-    # rsqr = res.rsquared
-    return res #f_pval, pvals, rsqr
+        
+    # zscore spikes across trials if specified to
+    if normalize_fr_across_trials:
+        spikes_to_use = zscore(spikes,axis=0)
+    else:
+        spikes_to_use = spikes
+
+    return sm.OLS(spikes_to_use, sm.add_constant(behavior_zscr,has_constant='add'), missing='raise',hasconst=True).fit()
 
 
-def find_sig_bins(pvals, f_pvals, alpha=0.05, n_consec=3):
+def find_sig_bins(f_pvals, pvals, alpha=0.05, n_consec=3):
     """Significant if at least `n_consec` consecutive bins have p <= alpha.
 
     Returns (is_sig, sig_bins_idxs), where sig_bins_idxs are the indices of all bins

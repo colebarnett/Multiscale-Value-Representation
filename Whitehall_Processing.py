@@ -29,7 +29,7 @@ from matplotlib import pyplot as plt
 
 import Whitehall_utils as utils
 from file_info import get_block_info, get_area_info
-import DecisionMakingBehavior_Whitehall as BehaviorAnalysis
+
 # from Whitehall_Processing import ProcessSpikes,ProcessBehavior,load_data
 from Whitehall_Globals import (SUBSESSIONS,SESSIONS,
 PROJ_FOLDER,BMI_FOLDER,DATA_FOLDER,NS_FOLDER,NSX_FOLDER,
@@ -37,18 +37,24 @@ REGRESSOR_SUPERSET_DICT,ALL_REGRESSORS,FREQ_BANDS,AREAS,REW_PROBS,
 VALUE_MODEL,ALIGNMENT,HOLD_DURATION,ENCODING_WINDOW,
 T_BEFORE,T_AFTER,T_BOXCAR_SIZE,T_BOXCAR_STEP,T_VECTOR,N_TIMEBINS,MIN_FR_THRESH,MIN_NUM_TRIALS,
 LEARNING_RATES,ALPHA_THRESHOLD,
-COLORS,LINESTYLES,MARKERSTYLES,HATCHSTYLES)
-
-from RishiValueModeling import ValueModelingClass
-from TwoStageQLearning_DualBaselineSide import Calc_DistrQlearning_2Targs_DualBaselineSide
-from TwoStageQLearning_BaselineSide import Calc_DistrQlearning_2Targs_BaselineSide
+COLORS,LINESTYLES,MARKERSTYLES,HATCHSTYLES,
+OVERWRITE_SPIKES,OVERWRITE_LFP,LOAD_BEHAV,LOAD_SPIKES,LOAD_LFP,VERBOSE)
 
 # Add paths for necessary packages to search path
 sys.path.insert(1,BMI_FOLDER) 
 sys.path.insert(2, NS_FOLDER) 
 sys.path.insert(3,os.path.join(PROJ_FOLDER,'utils'))
+
 # from riglib.blackrock.brpylib import NsxFile
-from nsfile import NSFile,NsxFile
+from nsfile import NSFile
+from riglib.blackrock.brpylib import NsxFile
+from RishiValueModeling import ValueModelingClass
+import DecisionMakingBehavior_Whitehall as BehaviorAnalysis
+from TwoStageQLearning_DualBaselineSide import Calc_DistrQlearning_2Targs_DualBaselineSide
+from TwoStageQLearning_BaselineSide import Calc_DistrQlearning_2Targs_BaselineSide
+
+
+
 
 #%% Main
 
@@ -501,7 +507,7 @@ class ProcessBehavior:
             self.has_decoder = True
 
      
-    def get_behavior(self,Q_learning=True,learning_rates=None):
+    def get_behavior(self,Q_learning=True,learning_rates=None,value_model=VALUE_MODEL):
         '''
         Method which takes the hdf files for a session and computes key behavioral metrics for each 
         trial, such as value of each target and rpe. These along with information about each
@@ -599,7 +605,7 @@ class ProcessBehavior:
                 Q1,Q2,_,_,_,_ = Calc_DistrQlearning_2Targs_BaselineSide(parameters, Q0, choices, rewards, instructed_or_freechoice, choice_side_raw)
         elif Q_learning and not learning_rates: #do Rishi's Q-learning method w/ specified model
             vmc = ValueModelingClass()
-            value_dict = vmc.get_values(choices,rewards,instructed_or_freechoice,choice_side_raw, num_trials_A=0, num_trials_B=0, method=VALUE_MODEL)
+            value_dict = vmc.get_values(choices,rewards,instructed_or_freechoice,choice_side_raw, num_trials_A=0, num_trials_B=0, method=value_model)
             [Q1,Q2] = [value_dict['Q_low'],value_dict['Q_high']]
             self.Q_learning_params = value_dict['params']
         else: # do empirical value 
@@ -702,39 +708,45 @@ class ProcessBehavior:
 
         return
     
-    def get_learning_rate_grid_behavior(self,learning_rate_grid):
+    def get_learning_rate_grid_behavior(self):
         
+        value_models_and_grid = {
+                'DualBaselineSide' : np.linspace(start=0.05,stop=0.95,num=19),
+                'BaselineSide' : np.linspace(start=0.02,stop=0.98,num=49),
+                } #can add models/grids here
         
+        allmodels_dict_out = dict()
         
-        if 'Dual' in VALUE_MODEL:
+        for value_model,grid in value_models_and_grid.items():
             
-            dict_out = {'dict layout':'(pos alpha,neg alpha) : behavior_df',
-                        'learning rate grid':learning_rate_grid,
-                        'data': dict() }
-        
-            for pos_alpha in learning_rate_grid:
-                for neg_alpha in learning_rate_grid:
+            if 'Dual' in value_model:
+                model_dict = {'dict layout':'(pos alpha,neg alpha) : behavior_df',
+                            'learning rate grid':grid,
+                            'data': dict() }
+            
+                for pos_alpha in grid:
+                    for neg_alpha in grid:
+                        
+                        # get beahvior according to current learning rates
+                        self.get_behavior(Q_learning=True, learning_rates=[pos_alpha,neg_alpha], value_model=value_model)
+                        
+                        model_dict['data'][(np.round(pos_alpha,2),np.round(neg_alpha,2))] = self.behavior_df
+                    
+            if 'Dual' not in VALUE_MODEL:
+                model_dict = {'dict layout':'(alpha) : behavior_df',
+                            'learning rate grid':grid,
+                            'data': dict() }
+            
+                for alpha in grid:
                     
                     # get beahvior according to current learning rates
-                    self.get_behavior(Q_learning=True, learning_rates=[pos_alpha,neg_alpha])
+                    self.get_behavior(Q_learning=True, learning_rates=[alpha], value_model=value_model)
                     
-                    dict_out['data'][(np.round(pos_alpha,2),np.round(neg_alpha,2))] = self.behavior_df
-                    
-        if 'Dual' not in VALUE_MODEL:
+                    model_dict['data'][(np.round(alpha,2))] = self.behavior_df
+                
+            allmodels_dict_out[value_model] = model_dict
             
-            dict_out = {'dict layout':'(alpha) : behavior_df',
-                        'learning rate grid':learning_rate_grid,
-                        'data': dict() }
-        
-            for alpha in learning_rate_grid:
-                
-                # get beahvior according to current learning rates
-                self.get_behavior(Q_learning=True, learning_rates=[alpha])
-                
-                dict_out['data'][(np.round(alpha,2))] = self.behavior_df
-                
-                
-        utils.save_pkl(dict_out,'LR_Grid_behavior_dfs_dict',self.session,DATA_FOLDER)
+        utils.save_pkl(allmodels_dict_out,'LR_Grid_behavior_dfs_dict',self.session,DATA_FOLDER)
                 
         return 
     
@@ -1330,14 +1342,7 @@ def load_data(overwrite_spikes=False,overwrite_lfp=False,load_behav=True,load_sp
 
 #%% Load Data
 
-SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(
-                                            overwrite_spikes_flag=True,
-                                            overwrite_lfp_flag=False,
-                                            load_behav=True,
-                                            load_spikes=True,
-                                            load_flp=False,
-                                            verbose=False
-                                            )
+SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(OVERWRITE_SPIKES,OVERWRITE_LFP,LOAD_BEHAV,LOAD_SPIKES,LOAD_LFP,VERBOSE)
 
 
 def get_Spikes_Behav_LFP(s: int, session: str):

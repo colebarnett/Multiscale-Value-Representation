@@ -24,39 +24,24 @@ import statsmodels.formula.api as sm_api
 import matplotlib.lines as mlines
 from matplotlib import pyplot as plt
 import matplotlib.patches as mpatches
+from matplotlib.colors import Normalize
 # from matplotlib.colors import BoundaryNorm
 # from numpy.polynomial.polynomial import polyfit
 
 import Whitehall_utils as utils
 from file_info import get_block_info, get_area_info
 import DecisionMakingBehavior_Whitehall as BehaviorAnalysis
-from Whitehall_Processing import ProcessSpikes,ProcessBehavior,load_data
+from Whitehall_Processing import (ProcessSpikes,ProcessBehavior,get_Spikes_Behav_LFP,
+SPIKES_LIST,BEHAV_LIST,LFP_LIST) #data is loaded here
 from Whitehall_Globals import (SUBSESSIONS,SESSIONS,
 PROJ_FOLDER,BMI_FOLDER,DATA_FOLDER,NS_FOLDER,NSX_FOLDER,
 REGRESSOR_SUPERSET_DICT,ALL_REGRESSORS,FREQ_BANDS,AREAS,REW_PROBS,
 VALUE_MODEL,ALIGNMENT,HOLD_DURATION,ENCODING_WINDOW,
-T_BEFORE,T_AFTER,T_RES,T_VECTOR,MIN_FR_THRESH,MIN_NUM_TRIALS,
+T_BEFORE,T_AFTER,T_BOXCAR_SIZE,T_BOXCAR_STEP,T_VECTOR,N_TIMEBINS,MIN_FR_THRESH,MIN_NUM_TRIALS,
 LEARNING_RATES,ALPHA_THRESHOLD,
 COLORS,LINESTYLES,MARKERSTYLES,HATCHSTYLES)
 
-#%% Load Data
 os.chdir(PROJ_FOLDER)
-SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(
-                                            overwrite_spikes_flag=True,
-                                            overwrite_lfp_flag=False,
-                                            load_behav=True,
-                                            load_spikes=True,
-                                            load_flp=False,
-                                            verbose=False
-                                            )
-def get_Spikes_Behav_LFP(s: int, session: str):
-    # s is idx counter representing the number session to load
-    # session is the str name of the session to load: e.g. "braz20260728_03_te2536""
-    assert SESSIONS[s] == session
-    Spikes = SPIKES_LIST[s]
-    Behav = BEHAV_LIST[s]
-    LFP = LFP_LIST[s]
-    return Spikes, Behav, LFP
 
 #%% Main
 
@@ -817,56 +802,86 @@ class PCA_Analysis:
         
         return
 
-def plot_temporal_encoding(psths, unit, behavior_df, regressor, n_value_bins=6):
+
+
+
+
+
+def find_sig_bins(pvals, f_pvals, alpha=0.05, n_consec=3):
+    """Significant if at least `n_consec` consecutive bins have both
+    regressor p <= alpha and whole-regression F-test p <= alpha.
+
+    pvals   : (n_timebins,) p-value of the regressor's beta in each bin
+    f_pvals : (n_timebins,) F-test p-value of the full regression in each bin
+
+    Returns (is_sig, sig_bins), where sig_bins are the indices of all bins
+    that belong to a run of >= n_consec significant bins.
+    """
+    sig = ((pvals <= alpha) & (f_pvals <= alpha)).astype(int)
+    run_starts = np.flatnonzero(np.convolve(sig, np.ones(n_consec, dtype=int), 'valid') == n_consec)
+    sig_bins = np.unique(run_starts[:, None] + np.arange(n_consec))
+    return sig_bins.size > 0, sig_bins
+
+
+def plot_temporal_encoding(psth_dict, unit, behavior_df, regressor, bin_times, n_bins=5,
+                           alpha=0.05, n_consec=3):
     """Rainbow plot for one unit.
 
     Top: trial-averaged PSTHs, split into bins by the value of `regressor`.
     Bottom: OLS beta for `regressor` at each time bin (all regressors fit jointly),
             red = p<=0.05, blue = p<0.1, grey = n.s.
 
-    psths       :(n_trials, n_timebins) array
+    psth_dict   : dict, unit label -> (n_trials, n_timebins) array
     unit        : key of psth_dict to plot
     behavior_df : DataFrame, one row per trial, one column per regressor
     regressor   : column of behavior_df to plot
+    bin_times   : (n_timebins,) time of each PSTH bin relative to the alignment event
     """
-    assert psths.shape == (len(behavior_df), len(T_VECTOR))
+    psths = psth_dict[unit]
+    assert psths.shape == (len(behavior_df), len(bin_times))
+    title = unit
 
     # Regress each time bin on all regressors; keep the chosen regressor's beta and p-value
     X = sm.add_constant(behavior_df)
     fits = [sm.OLS(psths[:, k], X).fit() for k in range(psths.shape[1])]
     betas = np.array([f.params[regressor] for f in fits])
     pvals = np.array([f.pvalues[regressor] for f in fits])
+    f_pvals = np.array([f.f_pvalue for f in fits])
+    is_sig, sig_bins = find_sig_bins(pvals, f_pvals, alpha, n_consec)
 
     # Bin trials by regressor value (equal-width, non-overlapping bins)
     values = behavior_df[regressor].to_numpy()
-    edges = np.linspace(values.min(), values.max(), n_value_bins + 1)
-    bin_idx = np.digitize(values, edges[1:-1])  # 0 .. n_value_bins-1
-    cmap = plt.get_cmap('jet', n_value_bins)
+    edges = np.linspace(values.min(), values.max(), n_bins + 1)
+    bin_idx = np.digitize(values, edges[1:-1])  # 0 .. n_bins-1
+    centers = (edges[:-1] + edges[1:]) / 2
+    cmap = plt.cm.jet
+    norm = Normalize(edges[0], edges[-1])
 
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, height_ratios=[2, 1], layout="constrained")
 
     # Top: PSTH per value bin
-    for j in range(n_value_bins):
+    for j in range(n_bins):
         in_bin = bin_idx == j
         if not in_bin.any():
             continue
         avg, sem = utils.get_avg_sem(psths[in_bin], axis=0)
-        ax1.plot(T_VECTOR, avg, color=cmap(j))
-        ax1.fill_between(T_VECTOR, avg - sem, avg + sem, color=cmap(j), alpha=0.1)
+        color = cmap(norm(centers[j]))
+        ax1.plot(bin_times, avg, color=color)
+        ax1.fill_between(bin_times, avg - sem, avg + sem, color=color, alpha=0.1)
     ax1.set_ylabel('FR')
-    fig.colorbar(plt.cm.ScalarMappable(norm=BoundaryNorm(edges, n_value_bins), cmap=cmap),
+    fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
                  ax=ax1, location='top', label=regressor)
 
     # Bottom: beta over time, colored by significance
-    colors = np.where(pvals <= 0.005, 'red', np.where(pvals < 0.1, 'blue', 'grey'))
-    ax2.scatter(T_VECTOR, betas, c=colors)
+    colors = np.where(pvals <= alpha, 'red', np.where(pvals < 0.1, 'blue', 'grey'))
+    ax2.scatter(bin_times, betas, c=colors)
     ax2.axhline(0, color='k')
     ax2.set_ylabel('Beta coeff')
     ax2.set_xlabel('Time (s)')
 
-    fig.suptitle(unit)
+    fig.suptitle(title)
     plt.show()
-    return fig
+    return fig, is_sig, sig_bins
 
 def do_rainbow_plots():
     

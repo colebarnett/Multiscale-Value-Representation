@@ -6,8 +6,8 @@ Created on Fri Nov 20 13:30:10 2026
 """
 #### Libraries, Paths, and Imports
 import os
-import sys
-import gif
+# import sys
+# import gif
 # import copy
 import time
 # import math
@@ -28,36 +28,19 @@ import matplotlib.patches as mpatches
 # from numpy.polynomial.polynomial import polyfit
 
 import Whitehall_utils as utils
-from file_info import get_block_info, get_area_info
+# from file_info import get_block_info, get_area_info
 import DecisionMakingBehavior_Whitehall as BehaviorAnalysis
-from Whitehall_Processing import ProcessSpikes,ProcessBehavior,load_data
+from Whitehall_Processing import (ProcessSpikes,ProcessBehavior,get_Spikes_Behav_LFP,
+SPIKES_LIST,BEHAV_LIST,LFP_LIST) #data is loaded here
 from Whitehall_Globals import (SUBSESSIONS,SESSIONS,
 PROJ_FOLDER,BMI_FOLDER,DATA_FOLDER,NS_FOLDER,NSX_FOLDER,
 REGRESSOR_SUPERSET_DICT,ALL_REGRESSORS,FREQ_BANDS,AREAS,REW_PROBS,
 VALUE_MODEL,ALIGNMENT,HOLD_DURATION,ENCODING_WINDOW,
-T_BEFORE,T_AFTER,T_RES,T_VECTOR,MIN_FR_THRESH,MIN_NUM_TRIALS,
+T_BEFORE,T_AFTER,T_BOXCAR_SIZE,T_BOXCAR_STEP,T_VECTOR,N_TIMEBINS,MIN_FR_THRESH,MIN_NUM_TRIALS,
 LEARNING_RATES,ALPHA_THRESHOLD,
 COLORS,LINESTYLES,MARKERSTYLES,HATCHSTYLES)
 
-
-#%% Load Data
 os.chdir(PROJ_FOLDER)
-SPIKES_LIST,BEHAV_LIST,LFP_LIST = load_data(
-                                            overwrite_spikes_flag=True,
-                                            overwrite_lfp_flag=False,
-                                            load_behav=True,
-                                            load_spikes=True,
-                                            load_flp=False,
-                                            verbose=False
-                                            )
-def get_Spikes_Behav_LFP(s: int, session: str):
-    # s is idx counter representing the number session to load
-    # session is the str name of the session to load: e.g. "braz20260728_03_te2536""
-    assert SESSIONS[s] == session
-    Spikes = SPIKES_LIST[s]
-    Behav = BEHAV_LIST[s]
-    LFP = LFP_LIST[s]
-    return Spikes, Behav, LFP
 
 
 #%% Main

@@ -141,8 +141,8 @@ class ChoiceBehavior_Whitehall():
         self.ind_hold_penalty_states = np.ravel(np.nonzero(self.state == b'hold_penalty'))
         self.ind_timeout_penalty_states = np.ravel(np.nonzero(self.state == b'timeout_penalty'))
         
-        self.reward_probabiltyH = table.root.task[:]['reward_probabilityH'][self.state_time[self.ind_check_reward_states]]
-        self.reward_probabilityL = table.root.task[:]['reward_probabilityL'][self.state_time[self.ind_check_reward_states]]
+        self.reward_probabilityH = np.ravel(table.root.task[:]['reward_probabilityH'][self.state_time[self.ind_check_reward_states]])
+        self.reward_probabilityL = np.ravel(table.root.task[:]['reward_probabilityL'][self.state_time[self.ind_check_reward_states]])
         
         self.fs_hdf = 60 #Hz
         

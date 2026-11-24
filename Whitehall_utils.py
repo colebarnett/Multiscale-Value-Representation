@@ -254,6 +254,17 @@ def calc_percent_encoding(pval_df,alpha_threshold):
     percent_encoding = num_signif / num_units
     return percent_encoding, num_units
 
+def mean_of_top_n_of_arr(arr,n):
+    """Return the mean of the n largest values of arr."""
+    arr = np.asarray(arr)
+    assert arr.size >= n
+    return np.sort(arr)[-n:].mean()
+
+def same_sign(arr):
+    """True if no values have opposite signs (zeros allowed)."""
+    arr = np.asarray(arr)
+    return bool(np.all(arr >= 0) or np.all(arr <= 0))
+
 #%% Regression
 def linear_encoding_regression(spikes,behavior):
     '''
@@ -305,6 +316,18 @@ def linear_encoding_regression(spikes,behavior):
     # f_pval = res.f_pvalue
     # rsqr = res.rsquared
     return res #f_pval, pvals, rsqr
+
+
+def find_sig_bins(pvals, f_pvals, alpha=0.05, n_consec=3):
+    """Significant if at least `n_consec` consecutive bins have p <= alpha.
+
+    Returns (is_sig, sig_bins_idxs), where sig_bins_idxs are the indices of all bins
+    that belong to a run of >= n_consec significant bins.
+    """
+    sig = ((pvals <= alpha) & (f_pvals <= alpha)).astype(int)
+    run_starts = np.flatnonzero(np.convolve(sig, np.ones(n_consec, dtype=int), 'valid') == n_consec)
+    sig_bins_idxs = np.unique(run_starts[:, None] + np.arange(n_consec))
+    return sig_bins_idxs.size > 0, sig_bins_idxs
 
 def lr_reg(learning_rates,Behavior,fr,trials,regressors):    
         
